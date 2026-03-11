@@ -3,9 +3,9 @@
 # TypeLearn
 ![alt text](image.png)
 
-### Learn English from every keystroke.
+### 每一次敲键都能学英文。
 
-A privacy-first macOS menu bar app that transforms your daily typing into continuous, ambient language learning.
+一款隐私优先的 macOS 菜单栏应用，把你的日常输入转化为持续、轻量的语言学习。
 
 [![macOS](https://img.shields.io/badge/macOS-12%2B-000000?style=flat&logo=apple&logoColor=white)](#)
 [![Swift](https://img.shields.io/badge/Swift-6-F05138?style=flat&logo=swift&logoColor=white)](#)
@@ -15,51 +15,51 @@ A privacy-first macOS menu bar app that transforms your daily typing into contin
 
 <br/>
 
-**TypeLearn quietly observes what you type, identifies learning moments, and helps improve your vocabulary, phrasing, and expression — without ever interrupting your flow.**
+**TypeLearn 会安静地观察你的输入，识别学习时刻，帮助你提升词汇、表达与措辞 —— 全程不打断你的工作流。**
 
 <br/>
 
-[Getting Started](#getting-started) · [Architecture](#architecture) · [API Reference](#api-reference) · [Privacy](#privacy) · [中文文档](README-zh.md)
+[快速开始](#快速开始) · [架构](#架构) · [API参考](#api参考) · [隐私](#隐私)
 
 </div>
 
 <br/>
 
-## Why TypeLearn?
+## 为什么是 TypeLearn？
 
-Most language-learning tools demand dedicated study time. TypeLearn takes a different approach: it meets you where you already are — at the keyboard.
+大多数语言学习工具都要求你专门抽时间学习。TypeLearn 选择另一条路径：在你已经在做的事情上学习 —— 在键盘上。
 
-> **Type naturally. Learn continuously. Stay in flow.**
-
-<br/>
-
-## Features
-
-| | Feature | Description |
-|---|---------|-------------|
-| **⌨️** | **Ambient Learning** | Learns from your real typing — no flashcards, no separate study sessions |
-| **📍** | **Menu Bar Native** | Lives in your macOS menu bar, always one click away |
-| **🔒** | **Privacy-First** | All data stays local by default — nothing leaves your device without explicit consent |
-| **🌐** | **Multilingual Capture** | Detects Chinese input and translates to English for cross-language learning |
-| **✏️** | **Grammar Coaching** | Spots common mistakes and suggests improvements with clear explanations |
-| **📖** | **Daily Stories** | Generates a personalized narrative from your day's writing to reinforce learning |
-| **🔑** | **Bring Your Own Key** | Connect any OpenAI-compatible API for enhanced AI-powered features |
+> **自然输入，持续学习，保持专注。**
 
 <br/>
 
-## Getting Started
+## 功能
 
-### Prerequisites
+| | 功能 | 说明 |
+|---|------|------|
+| **⌨️** | **环境式学习** | 从真实输入中学习 —— 无需背单词卡、无需独立学习时间 |
+| **📍** | **菜单栏原生** | 常驻 macOS 菜单栏，随时可用 |
+| **🔒** | **隐私优先** | 默认全程本地处理 —— 未经明确同意不出设备 |
+| **🌐** | **多语言捕捉** | 识别中文输入并翻译为英文以支持跨语言学习 |
+| **✏️** | **语法教练** | 发现常见错误并给出清晰的改进建议 |
+| **📖** | **每日故事** | 用你当天的写作生成故事，强化学习 |
+| **🔑** | **自带密钥** | 连接任意 OpenAI 兼容 API 以获得更强 AI 能力 |
 
-| Requirement | Version |
-|-------------|---------|
+<br/>
+
+## 快速开始
+
+### 前置条件
+
+| 需求 | 版本 |
+|------|------|
 | macOS | 12+ |
 | Node.js | 18+ |
-| Xcode | Latest |
+| Xcode | 最新 |
 
-The app will prompt for **Accessibility** and **Input Monitoring** permissions on first launch.
+首次启动时会提示 **辅助功能** 与 **输入监控** 权限。
 
-### Quick Start
+### 快速启动
 
 ```bash
 # Clone & install
@@ -74,11 +74,11 @@ npm run dev:service
 # → http://127.0.0.1:43010
 ```
 
-Then open `macos/TypeLearn.xcodeproj` in Xcode and hit **Run** to launch the menu bar app.
+然后在 Xcode 中打开 `macos/TypeLearn.xcodeproj`，点击 **Run** 即可启动菜单栏应用。
 
 <br/>
 
-## Architecture
+## 架构
 
 ```
                          TypeLearn
@@ -93,35 +93,35 @@ Then open `macos/TypeLearn.xcodeproj` in Xcode and hit **Run** to launch the men
 ```
 
 <details>
-<summary><b>How it works</b></summary>
+<summary><b>工作原理</b></summary>
 
 <br/>
 
 ```
- You type → CaptureMonitor detects input → Buffer flushes on pause
+ 你输入 → CaptureMonitor 识别输入 → 暂停时写入缓冲区
                                                     │
                                                     ▼
                                           POST /artifacts
                                                     │
                                                     ▼
                                      ┌──────────────────────────┐
-                                     │   Orchestration Service   │
+                                     │     编排服务（Service）    │
                                      │                          │
-                                     │  1. Detect language      │
-                                     │  2. Translate if needed  │
-                                     │  3. Apply coaching rules │
-                                     │  4. Generate artifact    │
-                                     │  5. Persist to disk      │
+                                     │  1. 识别语言             │
+                                     │  2. 必要时翻译           │
+                                     │  3. 应用语法规则         │
+                                     │  4. 生成学习条目         │
+                                     │  5. 持久化到本地         │
                                      └──────────────────────────┘
                                                     │
                                                     ▼
-                                          Learning artifact
-                                         surfaces in your UI
+                                          学习条目
+                                         在 UI 中展示
 ```
 
 </details>
 
-### Monorepo Structure
+### Monorepo 结构
 
 ```
 TypeLearn/
@@ -156,7 +156,7 @@ TypeLearn/
 
 <br/>
 
-## Development
+## 开发
 
 ```bash
 npm run build           # Build all workspaces
@@ -166,7 +166,7 @@ npm run test            # Run test suite
 ```
 
 <details>
-<summary><b>Workspace-specific commands</b></summary>
+<summary><b>Workspace 专用命令</b></summary>
 
 <br/>
 
@@ -184,9 +184,9 @@ npm run build  --workspace shared
 
 <br/>
 
-## API Reference
+## API参考
 
-The orchestration service runs at `http://127.0.0.1:43010`.
+编排服务运行在 `http://127.0.0.1:43010`。
 
 <details open>
 <summary><b>Endpoints</b></summary>
@@ -209,9 +209,9 @@ The orchestration service runs at `http://127.0.0.1:43010`.
 
 <br/>
 
-## Privacy
+## 隐私
 
-TypeLearn is built on a strict privacy model — your keystrokes are yours.
+TypeLearn 建立在严格的隐私模型之上 —— 你的输入只属于你。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -231,43 +231,43 @@ TypeLearn is built on a strict privacy model — your keystrokes are yours.
                  └─────────────────┘
 ```
 
-| Mode | Description | Remote Calls |
-|------|-------------|:------------:|
-| **Local** *(default)* | All processing on-device | None |
-| **BYOK Remote** | Bring your own API key | Your provider only |
-| **Custom Endpoint** | Point to any OpenAI-compatible API | Your endpoint only |
+| 模式 | 说明 | 远程调用 |
+|------|------|:-------:|
+| **本地** *(默认)* | 全部本地处理 | 无 |
+| **BYOK Remote** | 自带 API Key | 仅你的 provider |
+| **自定义端点** | 指向任意 OpenAI 兼容 API | 仅你的端点 |
 
-- All data persists locally at `~/.typelearn/state.json`
-- AI features (translation, story generation) are **opt-in** and require explicit provider configuration
-- No data is ever shared with TypeLearn developers
+- 所有数据本地保存在 `~/.typelearn/state.json`
+- AI 功能（翻译、故事生成）为 **可选**，需明确配置 provider
+- 不会向 TypeLearn 开发者共享任何数据
 
 <br/>
 
-## Tech Stack
+## 技术栈
 
-| Layer | Technology | Role |
-|-------|-----------|------|
-| **Frontend** | Swift 6, SwiftUI | Menu bar app, keyboard capture, UI |
-| **Backend** | TypeScript, Node.js | Orchestration, NLP, persistence |
-| **Build** | npm workspaces, tsc | Monorepo management |
-| **Persistence** | JSON (local file) | `~/.typelearn/state.json` |
-| **IPC** | HTTP (localhost) | App ↔ Service communication |
+| 层 | 技术 | 作用 |
+|----|------|------|
+| **前端** | Swift 6, SwiftUI | 菜单栏应用、键盘捕捉、UI |
+| **后端** | TypeScript, Node.js | 编排、NLP、持久化 |
+| **构建** | npm workspaces, tsc | Monorepo 管理 |
+| **持久化** | JSON (local file) | `~/.typelearn/state.json` |
+| **进程通信** | HTTP (localhost) | App ↔ Service 通信 |
 
 <br/>
 
 ## Roadmap
 
-- [x] macOS menu bar shell with permission management
-- [x] Privacy-conscious keyboard capture (CGEvent + Accessibility)
-- [x] Learning artifact generation with grammar coaching
-- [x] Local persistence and review UI
-- [x] Provider abstraction (local / BYOK / custom)
-- [x] Chinese → English translation pipeline
-- [x] Daily story generation
-- [ ] Enhanced noise filtering and capture quality
-- [ ] Richer coaching with contextual suggestions
-- [ ] Spaced repetition for learned artifacts
-- [ ] Export and backup functionality
+- [x] macOS 菜单栏外壳与权限管理
+- [x] 隐私友好的键盘捕捉（CGEvent + Accessibility）
+- [x] 语法教练与学习条目生成
+- [x] 本地持久化与回顾 UI
+- [x] Provider 抽象（local / BYOK / custom）
+- [x] 中文 → 英文翻译管线
+- [x] 每日故事生成
+- [ ] 更强的噪声过滤与捕捉质量
+- [ ] 更丰富的上下文改写建议
+- [ ] 学习条目的间隔复习
+- [ ] 导出与备份功能
 
 <br/>
 
@@ -276,5 +276,5 @@ TypeLearn is built on a strict privacy model — your keystrokes are yours.
 All rights reserved.
 
 <div align="center">
-<sub>Built with care for privacy and the craft of language.</sub>
+<sub>为隐私与语言学习体验用心打造。</sub>
 </div>
