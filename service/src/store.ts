@@ -5,8 +5,8 @@ import { generateDailyStory } from './story.js';
 import { isLikelyPinyin, restoreChineseFromRomanized, translateToEnglish } from './translator.js';
 import type { PersistedState } from './types.js';
 
-const maxRetries = 3;
-const baseRetryDelayMs = 1500;
+const maxRetries = 10; // 提高重试上限
+const baseRetryDelayMs = 5000;
 
 export class LearningStore {
   #state: PersistedState = {
@@ -19,18 +19,67 @@ export class LearningStore {
     },
   };
 
+  #queue: string[] = [];
+  #isProcessing = false;
+
   async init(): Promise<void> {
     this.#state = await loadState();
+    
+    // 初始化时，将所有非 done 的记录重置为 pending
     this.#state.records = this.#state.records.map((record) => ({
       ...record,
-      status: record.status === 'processing' ? 'pending' : record.status,
+      status: record.status === 'done' ? 'done' : 'pending',
     }));
+    
     await saveState(this.#state);
-    for (const record of this.#state.records) {
-      if (record.status === 'pending' && record.retryCount < maxRetries) {
-        this.scheduleRetry(record.id, record.retryCount);
+
+    // 启动后台队列处理器
+    this.startQueueProcessor();
+    
+    // 启动定期检查器（Watchdog），每 30 秒检查一次是否有遗漏或失败的任务
+    setInterval(() => this.watchdog(), 30000);
+  }
+
+  private watchdog(): void {
+    const pendingIds = this.#state.records
+      .filter(r => (r.status === 'pending' || r.status === 'failed') && !this.#queue.includes(r.id))
+      .map(r => r.id);
+    
+    if (pendingIds.length > 0) {
+      console.log(`[Queue] Watchdog found ${pendingIds.length} items to process.`);
+      pendingIds.forEach(id => this.enqueue(id));
+    }
+  }
+
+  private enqueue(id: string): void {
+    if (!this.#queue.includes(id)) {
+      this.#queue.push(id);
+      this.startQueueProcessor();
+    }
+  }
+
+  private async startQueueProcessor(): Promise<void> {
+    if (this.#isProcessing || this.#queue.length === 0) return;
+    
+    this.#isProcessing = true;
+    while (this.#queue.length > 0) {
+      const recordId = this.#queue.shift();
+      if (recordId) {
+        await this.processRecord(recordId);
       }
     }
+    this.#isProcessing = false;
+  }
+
+  async retry(recordId: string): Promise<boolean> {
+    const recordIndex = this.#state.records.findIndex((r) => r.id === recordId);
+    if (recordIndex === -1) return false;
+    
+    const record = this.#state.records[recordIndex];
+    this.#state.records[recordIndex] = { ...record, status: 'pending', retryCount: 0 };
+    await saveState(this.#state);
+    this.enqueue(recordId);
+    return true;
   }
 
   listArtifacts(): LearningArtifact[] {
@@ -40,9 +89,9 @@ export class LearningStore {
           id: record.id,
           sourceText: record.sourceText,
           restoredText: record.restoredText ?? null,
-          suggestion: record.status === 'failed' ? 'Processing failed' : 'Processing…',
+          suggestion: record.status === 'failed' ? 'Waiting for network…' : 'Processing…',
           explanation: record.status === 'failed'
-            ? 'TypeLearn will retry this capture in the background.'
+            ? 'TypeLearn will automatically retry this when the connection is stable.'
             : 'TypeLearn is converting your capture in the background.',
           createdAt: record.createdAt,
           status: record.status,
@@ -95,18 +144,13 @@ export class LearningStore {
 
     this.#state.records.unshift(record);
     await saveState(this.#state);
-    this.processRecord(record.id, settingsOverride);
+    this.enqueue(record.id);
     return record;
   }
 
   async deleteRecord(id: string): Promise<boolean> {
     const nextRecords = this.#state.records.filter((record) => record.id !== id);
-    const changed = nextRecords.length !== this.#state.records.length;
-
-    if (!changed) {
-      return false;
-    }
-
+    if (nextRecords.length === this.#state.records.length) return false;
     this.#state.records = nextRecords;
     await saveState(this.#state);
     return true;
@@ -119,59 +163,23 @@ export class LearningStore {
     return story;
   }
 
-  add(sourceText: string): LearningArtifact {
-    const artifact = buildLearningArtifact(sourceText);
-
-    this.#state.records.unshift({
-      id: artifact.id,
-      sourceText,
-      restoredText: null,
-      englishText: artifact.suggestion,
-      sourceLanguage: 'english',
-      sourceApp: null,
-      createdAt: artifact.createdAt,
-      status: 'done',
-      retryCount: 0,
-      lastError: null,
-    });
-    return artifact;
-  }
-
-  list(): LearningArtifact[] {
-    return this.listArtifacts();
-  }
-
-  private scheduleRetry(recordId: string, retryCount: number): void {
-    const delay = baseRetryDelayMs * Math.pow(2, retryCount);
-    setTimeout(() => {
-      void this.processRecord(recordId);
-    }, delay);
-  }
-
-  private async processRecord(recordId: string, settingsOverride?: ProviderSettings): Promise<void> {
-    let recordIndex = this.#state.records.findIndex((record) => record.id === recordId);
+  private async processRecord(recordId: string): Promise<void> {
+    let recordIndex = this.#state.records.findIndex((r) => r.id === recordId);
     if (recordIndex === -1) return;
 
-    let record = this.#state.records[recordIndex];
-    if (record.status === 'processing') return;
+    const record = this.#state.records[recordIndex];
+    if (record.status === 'done') return;
 
     this.#state.records[recordIndex] = { ...record, status: 'processing' };
     await saveState(this.#state);
 
-    const effectiveSettings = settingsOverride ?? this.#state.settings;
-
     try {
-      const restoration = await restoreChineseFromRomanized(record.sourceText, effectiveSettings);
-      if (isLikelyPinyin(record.sourceText) && !restoration.didRestore) {
-        throw new Error('restoration_failed');
-      }
-
+      const restoration = await restoreChineseFromRomanized(record.sourceText, this.#state.settings);
       const textForTranslation = restoration.didRestore ? restoration.restoredText : record.sourceText;
-      const translation = await translateToEnglish(textForTranslation, effectiveSettings);
+      const translation = await translateToEnglish(textForTranslation, this.#state.settings);
 
       recordIndex = this.#state.records.findIndex((item) => item.id === recordId);
       if (recordIndex === -1) return;
-      record = this.#state.records[recordIndex];
 
       this.#state.records[recordIndex] = {
         ...record,
@@ -185,10 +193,11 @@ export class LearningStore {
     } catch (error) {
       recordIndex = this.#state.records.findIndex((item) => item.id === recordId);
       if (recordIndex === -1) return;
-      record = this.#state.records[recordIndex];
 
       const nextRetry = record.retryCount + 1;
+      // 即使失败也保持 pending 状态，除非重试次数过多
       const status = nextRetry >= maxRetries ? 'failed' : 'pending';
+      
       this.#state.records[recordIndex] = {
         ...record,
         retryCount: nextRetry,
@@ -196,10 +205,9 @@ export class LearningStore {
         lastError: String(error),
       };
       await saveState(this.#state);
-
-      if (status === 'pending') {
-        this.scheduleRetry(recordId, nextRetry);
-      }
+      
+      // 如果失败了，等待一段时间后再让 watchdog 捡起来
+      console.error(`[Queue] Failed to process ${recordId}, attempt ${nextRetry}. Error: ${error}`);
     }
   }
 }

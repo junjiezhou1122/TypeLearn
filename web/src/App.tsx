@@ -10,9 +10,10 @@ export default function App() {
   const [stories, setStories] = useState<StoryArtifact[]>([]);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const [artRes, storyRes, setRes] = await Promise.all([
         fetch(`${API_BASE}/artifacts`),
@@ -26,10 +27,16 @@ export default function App() {
       console.error('Failed to fetch:', err);
     } finally {
       setLoading(false);
+      setIsFirstLoad(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+    // 每 5 秒自动静默刷新一次数据
+    const timer = setInterval(() => fetchData(true), 5000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="app-container">
@@ -65,8 +72,8 @@ export default function App() {
         </header>
 
         <section className="artifacts-grid">
-          {loading ? (
-            <div style={{ color: '#999', fontSize: '0.9rem' }}>Loading...</div>
+          {isFirstLoad && loading ? (
+            <div style={{ color: '#999', fontSize: '0.9rem', padding: '2rem' }}>Loading Insights...</div>
           ) : (
             <>
               {view === 'insights' && artifacts.map(art => (
@@ -96,9 +103,11 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
   const isGeneric = genericMessages.some(msg => 
     artifact.explanation.toLowerCase().includes(msg.toLowerCase())
   );
+
+  const isFailed = artifact.status === 'failed';
   
   return (
-    <article className="card">
+    <article className={`card ${isFailed ? 'failed-state' : ''}`}>
       <div className="card-header">
         <span>Insight</span>
         <span>{new Date(artifact.createdAt).toLocaleDateString()}</span>
@@ -119,7 +128,9 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
 
         <div className="flow-step highlight">
           <label>English Suggestion</label>
-          <div className="suggested-box serif">{artifact.suggestion}</div>
+          <div className={`suggested-box serif ${isFailed ? 'error' : ''}`}>
+            {artifact.suggestion}
+          </div>
         </div>
       </div>
       

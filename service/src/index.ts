@@ -94,6 +94,16 @@ const server = createServer((request, response) => {
     return;
   }
 
+  if (request.method === 'POST' && request.url.startsWith('/artifacts/') && request.url.endsWith('/retry')) {
+    const id = request.url.split('/')[2];
+    void (async () => {
+      const success = await store.retry(id);
+      response.writeHead(success ? 200 : 404, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ success }));
+    })();
+    return;
+  }
+
   if (request.method === 'POST' && request.url === '/stories/generate') {
     void (async () => {
       try {

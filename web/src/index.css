@@ -149,7 +149,43 @@ h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 0.5rem; }
   background: #fafafa;
   border-radius: 8px;
   border-left: 3px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
+
+.retry-action {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.4rem 0.6rem;
+  background: white;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.retry-action:hover {
+  background: #f0f7ff;
+  border-color: var(--accent);
+}
+
+.card.failed-state {
+  border-color: #ffebeb;
+  background: #fffcfc;
+}
+
+.suggested-box.error {
+  color: #d94e4e;
+  font-style: italic;
+  font-size: 1rem;
+}
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spinning { animation: spin 1s linear infinite; }
 
 /* Nav */
 .nav-item {
