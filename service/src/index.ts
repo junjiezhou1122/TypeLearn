@@ -9,6 +9,17 @@ const host = process.env.HOST ?? '127.0.0.1';
 const store = new LearningStore();
 
 const server = createServer((request, response) => {
+  // CORS Headers
+  response.setHeader('Access-Control-Allow-Origin', '*');
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
   if (!request.url) {
     response.writeHead(400).end();
     return;

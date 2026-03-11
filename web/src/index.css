@@ -1,0 +1,74 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Refined Editorial Palette (OKLCH) */
+  --bg-primary: oklch(98.5% 0.005 60);
+  --bg-secondary: oklch(96% 0.01 60);
+  --text-primary: oklch(25% 0.01 60);
+  --text-secondary: oklch(45% 0.01 60);
+  --accent: oklch(65% 0.08 150); /* Botanical Green */
+  --error: oklch(65% 0.12 30); /* Terracotta */
+  --border: oklch(90% 0.01 60);
+  
+  --spacing-base: clamp(1rem, 2vw, 1.5rem);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+}
+
+#root {
+  width: 100%;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Georgia", "Ibarra Real Nova", serif;
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.serif {
+  font-family: "Georgia", "Ibarra Real Nova", serif;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: all 0.2s ease-out-quint;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.staggered-list > * {
+  animation: fade-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.staggered-list > *:nth-child(1) { animation-delay: 0.1s; }
+.staggered-list > *:nth-child(2) { animation-delay: 0.15s; }
+.staggered-list > *:nth-child(3) { animation-delay: 0.2s; }
+.staggered-list > *:nth-child(4) { animation-delay: 0.25s; }
+.staggered-list > *:nth-child(5) { animation-delay: 0.3s; }

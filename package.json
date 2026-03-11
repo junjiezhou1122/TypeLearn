@@ -8,14 +8,17 @@
   },
   "workspaces": [
     "service",
-    "shared"
+    "shared",
+    "web"
   ],
   "scripts": {
+    "dev": "npm run dev:service & npm run dev:web",
+    "dev:service": "npm run dev --workspace service",
+    "dev:web": "npm run dev --workspace web",
+    "dev:app": "node scripts/dev-app.js",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "build": "npm run build --workspaces --if-present",
-    "dev:service": "npm run dev --workspace service",
-    "dev:app": "node scripts/dev-app.js"
+    "build": "npm run build --workspaces --if-present"
   }
 }
