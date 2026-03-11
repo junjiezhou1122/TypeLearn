@@ -9,18 +9,26 @@ export interface HealthStatus {
 export interface LearningArtifact {
   id: string;
   sourceText: string;
+  restoredText?: string | null;
   suggestion: string;
   explanation: string;
   createdAt: string;
+  status?: CaptureStatus;
 }
+
+export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed';
 
 export interface CaptureRecord {
   id: string;
   sourceText: string;
+  restoredText: string | null;
   englishText: string;
   sourceLanguage: 'chinese' | 'english' | 'mixed' | 'unknown';
   sourceApp: string | null;
   createdAt: string;
+  status: CaptureStatus;
+  retryCount: number;
+  lastError: string | null;
 }
 
 export interface StoryArtifact {

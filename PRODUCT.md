@@ -96,6 +96,14 @@ The MVP is not meant to solve every language-learning use case. It should valida
 - validate privacy boundaries and reliability
 - prepare the product for repeated real-world usage
 
+### Milestone 5: Speak Learn (Voice Input)
+
+- capture voice input and transcribe to text in a privacy-first way
+- treat spoken content as learning input (same learning loop as typing)
+- keep English words intact while restoring any romanized Chinese in transcripts
+- surface original transcript with corrected text in the review UI
+- require explicit consent and clear controls for microphone access
+
 ## Validation Strategy
 
 - Validate that users understand the privacy model and trust the product.

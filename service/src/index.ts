@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import type { HealthStatus, ProviderSettings } from '../../shared/src/index';
 import { getSupportedProviderModes } from './provider.js';
 import { LearningStore } from './store.js';
+import { restoreChineseFromRomanized } from './translator.js';
 
 const port = Number.parseInt(process.env.PORT ?? '43010', 10);
 const host = process.env.HOST ?? '127.0.0.1';
@@ -54,7 +55,11 @@ const server = createServer((request, response) => {
     request.on('end', () => {
       void (async () => {
         try {
-          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { sourceText?: string; sourceApp?: string | null };
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+            sourceText?: string;
+            sourceApp?: string | null;
+            settings?: ProviderSettings;
+          };
           const sourceText = body.sourceText?.trim();
 
           if (!sourceText) {
@@ -63,7 +68,7 @@ const server = createServer((request, response) => {
             return;
           }
 
-          const record = await store.addRecord(sourceText, body.sourceApp ?? null);
+          const record = await store.addRecord(sourceText, body.sourceApp ?? null, body.settings);
           const artifact = store.listArtifacts()[0];
           response.writeHead(201, { 'content-type': 'application/json' });
           response.end(JSON.stringify({ item: artifact, record }));
@@ -124,6 +129,23 @@ const server = createServer((request, response) => {
     void (async () => {
       const deleted = await store.deleteRecord(id);
       response.writeHead(deleted ? 204 : 404).end();
+    })();
+    return;
+  }
+
+  if (request.method === 'GET' && request.url.startsWith('/debug/restore?')) {
+    const params = new URL(request.url, `http://${host}:${port}`).searchParams;
+    const text = params.get('text') ?? '';
+    void (async () => {
+      try {
+        console.log('[debug/restore] testing with text:', JSON.stringify(text));
+        const result = await restoreChineseFromRomanized(text, store.getSettings());
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ input: text, ...result }));
+      } catch (error) {
+        response.writeHead(500, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ error: String(error) }));
+      }
     })();
     return;
   }

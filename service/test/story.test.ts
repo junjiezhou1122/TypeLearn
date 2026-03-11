@@ -7,10 +7,14 @@ test('builds a fallback story from today\'s translated records', async () => {
     {
       id: '1',
       sourceText: '今天我很开心',
+      restoredText: null,
       englishText: 'Today I feel very happy.',
       sourceLanguage: 'chinese',
       sourceApp: 'Notes',
       createdAt: new Date().toISOString(),
+      status: 'done',
+      retryCount: 0,
+      lastError: null,
     },
   ], {
     baseUrl: '',

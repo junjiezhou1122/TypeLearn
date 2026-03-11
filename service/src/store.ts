@@ -2,8 +2,15 @@ import type { CaptureRecord, LearningArtifact, ProviderSettings, StoryArtifact }
 import { buildLearningArtifact } from './coaching.js';
 import { loadState, saveState } from './persistence.js';
 import { generateDailyStory } from './story.js';
-import { translateToEnglish } from './translator.js';
+import { isLikelyPinyin, restoreChineseFromRomanized, translateToEnglish } from './translator.js';
 import type { PersistedState } from './types.js';
+
+const maxRetries = 3;
+const baseRetryDelayMs = 1500;
+const processingSuggestion = 'Processing…';
+const processingExplanation = 'TypeLearn is converting your capture in the background.';
+const failedSuggestion = 'Processing failed';
+const failedExplanation = 'TypeLearn will retry this capture in the background.';
 
 export class LearningStore {
   #state: PersistedState = {
@@ -18,16 +25,32 @@ export class LearningStore {
 
   async init(): Promise<void> {
     this.#state = await loadState();
+    this.#state.records = this.#state.records.map((record) => ({
+      ...record,
+      status: record.status === 'processing' ? 'pending' : record.status,
+    }));
+    await saveState(this.#state);
+    for (const record of this.#state.records) {
+      if (record.status === 'pending' && record.retryCount < maxRetries) {
+        this.scheduleRetry(record.id, record.retryCount);
+      }
+    }
   }
 
   listArtifacts(): LearningArtifact[] {
     return this.#state.records.map((record) => {
+      if (record.status !== 'done') {
+        return this.buildProcessingArtifact(record);
+      }
+
       const coaching = buildLearningArtifact(record.englishText);
       return {
         ...coaching,
         id: record.id,
         sourceText: record.sourceText,
+        restoredText: record.restoredText ?? null,
         createdAt: record.createdAt,
+        status: record.status,
       };
     });
   }
@@ -50,20 +73,12 @@ export class LearningStore {
     return settings;
   }
 
-  async addRecord(sourceText: string, sourceApp: string | null): Promise<CaptureRecord> {
-    const translation = await translateToEnglish(sourceText, this.#state.settings);
-
-    const record: CaptureRecord = {
-      id: crypto.randomUUID(),
-      sourceText,
-      englishText: translation.englishText,
-      sourceLanguage: translation.sourceLanguage,
-      sourceApp,
-      createdAt: new Date().toISOString(),
-    };
+  async addRecord(sourceText: string, sourceApp: string | null, settingsOverride?: ProviderSettings): Promise<CaptureRecord> {
+    const record = this.buildPendingRecord(sourceText, sourceApp);
 
     this.#state.records.unshift(record);
     await saveState(this.#state);
+    this.processRecord(record.id, settingsOverride);
     return record;
   }
 
@@ -93,15 +108,109 @@ export class LearningStore {
     this.#state.records.unshift({
       id: artifact.id,
       sourceText,
+      restoredText: null,
       englishText: artifact.suggestion,
       sourceLanguage: 'english',
       sourceApp: null,
       createdAt: artifact.createdAt,
+      status: 'done',
+      retryCount: 0,
+      lastError: null,
     });
     return artifact;
   }
 
   list(): LearningArtifact[] {
     return this.listArtifacts();
+  }
+
+  private buildPendingRecord(sourceText: string, sourceApp: string | null): CaptureRecord {
+    return {
+      id: crypto.randomUUID(),
+      sourceText,
+      restoredText: null,
+      englishText: processingSuggestion,
+      sourceLanguage: 'unknown',
+      sourceApp,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      retryCount: 0,
+      lastError: null,
+    };
+  }
+
+  private buildProcessingArtifact(record: CaptureRecord): LearningArtifact {
+    const isFailed = record.status === 'failed';
+    return {
+      id: record.id,
+      sourceText: record.sourceText,
+      restoredText: record.restoredText ?? null,
+      suggestion: isFailed ? failedSuggestion : processingSuggestion,
+      explanation: isFailed ? failedExplanation : processingExplanation,
+      createdAt: record.createdAt,
+      status: record.status,
+    };
+  }
+
+  private scheduleRetry(recordId: string, retryCount: number): void {
+    const delay = baseRetryDelayMs * Math.pow(2, retryCount);
+    setTimeout(() => {
+      void this.processRecord(recordId);
+    }, delay);
+  }
+
+  private async processRecord(recordId: string, settingsOverride?: ProviderSettings): Promise<void> {
+    let recordIndex = this.#state.records.findIndex((record) => record.id === recordId);
+    if (recordIndex === -1) return;
+
+    let record = this.#state.records[recordIndex];
+    if (record.status === 'processing') return;
+
+    this.#state.records[recordIndex] = { ...record, status: 'processing' };
+    await saveState(this.#state);
+
+    const effectiveSettings = settingsOverride ?? this.#state.settings;
+
+    try {
+      const restoration = await restoreChineseFromRomanized(record.sourceText, effectiveSettings);
+      if (isLikelyPinyin(record.sourceText) && !restoration.didRestore) {
+        throw new Error('restoration_failed');
+      }
+
+      const textForTranslation = restoration.didRestore ? restoration.restoredText : record.sourceText;
+      const translation = await translateToEnglish(textForTranslation, effectiveSettings);
+
+      recordIndex = this.#state.records.findIndex((item) => item.id === recordId);
+      if (recordIndex === -1) return;
+      record = this.#state.records[recordIndex];
+
+      this.#state.records[recordIndex] = {
+        ...record,
+        restoredText: restoration.didRestore ? restoration.restoredText : null,
+        englishText: translation.englishText,
+        sourceLanguage: translation.sourceLanguage,
+        status: 'done',
+        lastError: null,
+      };
+      await saveState(this.#state);
+    } catch (error) {
+      recordIndex = this.#state.records.findIndex((item) => item.id === recordId);
+      if (recordIndex === -1) return;
+      record = this.#state.records[recordIndex];
+
+      const nextRetry = record.retryCount + 1;
+      const status = nextRetry >= maxRetries ? 'failed' : 'pending';
+      this.#state.records[recordIndex] = {
+        ...record,
+        retryCount: nextRetry,
+        status,
+        lastError: String(error),
+      };
+      await saveState(this.#state);
+
+      if (status === 'pending') {
+        this.scheduleRetry(recordId, nextRetry);
+      }
+    }
   }
 }

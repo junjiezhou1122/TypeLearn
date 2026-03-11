@@ -9,18 +9,24 @@ struct ServiceHealth: Decodable {
 struct LearningArtifact: Decodable, Identifiable {
     let id: String
     let sourceText: String
+    let restoredText: String?
     let suggestion: String
     let explanation: String
     let createdAt: String
+    let status: String?
 }
 
 struct CaptureRecord: Decodable, Identifiable {
     let id: String
     let sourceText: String
+    let restoredText: String?
     let englishText: String
     let sourceLanguage: String
     let sourceApp: String?
     let createdAt: String
+    let status: String
+    let retryCount: Int
+    let lastError: String?
 }
 
 struct StoryArtifact: Decodable, Identifiable {
@@ -52,6 +58,7 @@ private struct StoryListResponse: Decodable {
 private struct ArtifactCreateRequest: Encodable {
     let sourceText: String
     let sourceApp: String?
+    let settings: ProviderSettings?
 }
 
 private struct ArtifactCreateResponse: Decodable {
@@ -82,6 +89,7 @@ final class ServiceClient {
     private(set) var isGeneratingStory = false
     private let session: URLSession
     private let baseURL: URL
+    private var pollTask: Task<Void, Never>?
 
     init(
         session: URLSession = .shared,
@@ -111,8 +119,10 @@ final class ServiceClient {
             try await loadRecords()
             try await loadStories()
             try await loadSettings()
+            startPolling()
         } catch {
             state = .failed("Local service unavailable. Start npm run dev:service.")
+            stopPolling()
         }
     }
 
@@ -136,7 +146,7 @@ final class ServiceClient {
             var request = URLRequest(url: baseURL.appending(path: "artifacts"))
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(ArtifactCreateRequest(sourceText: trimmed, sourceApp: sourceApp))
+            request.httpBody = try JSONEncoder().encode(makeArtifactRequest(sourceText: trimmed, sourceApp: sourceApp))
 
             let (data, response) = try await session.data(for: request)
             let httpResponse = response as? HTTPURLResponse
@@ -149,6 +159,8 @@ final class ServiceClient {
             let payload = try JSONDecoder().decode(ArtifactCreateResponse.self, from: data)
             latestArtifact = payload.item
             records.insert(payload.record, at: 0)
+            try await loadArtifacts()
+            try await loadRecords()
             artifactError = nil
         } catch {
             artifactError = "Could not reach the local service."
@@ -254,5 +266,40 @@ final class ServiceClient {
         let httpResponse = response as? HTTPURLResponse
         guard httpResponse?.statusCode == 200 else { return }
         settings = try JSONDecoder().decode(ProviderSettings.self, from: data)
+    }
+
+    @MainActor
+    private func startPolling() {
+        if pollTask != nil { return }
+        pollTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard case .connected = self.state else { continue }
+                await self.loadArtifactsSafe()
+                await self.loadRecordsSafe()
+            }
+        }
+    }
+
+    @MainActor
+    private func stopPolling() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
+    @MainActor
+    private func loadArtifactsSafe() async {
+        try? await loadArtifacts()
+    }
+
+    @MainActor
+    private func loadRecordsSafe() async {
+        try? await loadRecords()
+    }
+
+    private func makeArtifactRequest(sourceText: String, sourceApp: String?) -> ArtifactCreateRequest {
+        let settingsPayload = settings.baseUrl.isEmpty ? nil : settings
+        return ArtifactCreateRequest(sourceText: sourceText, sourceApp: sourceApp, settings: settingsPayload)
     }
 }

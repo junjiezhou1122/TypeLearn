@@ -283,8 +283,22 @@ private struct DashboardTab: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
-                    Text(artifact.sourceText)
-                        .font(.callout)
+                    if let restored = artifact.restoredText, !restored.isEmpty {
+                        Text(restored)
+                            .font(.callout)
+                            .foregroundStyle(.blue)
+                    } else if artifact.status == "pending" || artifact.status == "processing" {
+                        Text("处理中…")
+                            .font(.callout)
+                            .foregroundStyle(.blue)
+                    } else if artifact.status == "failed" {
+                        Text("处理失败，将重试")
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                    } else {
+                        Text(artifact.sourceText)
+                            .font(.callout)
+                    }
 
                     Divider()
 
@@ -472,7 +486,22 @@ private struct LearnTab: View {
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
-                if record.sourceLanguage != "english" {
+                if let restored = record.restoredText, !restored.isEmpty {
+                    Text(restored)
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                } else if record.status == "pending" || record.status == "processing" {
+                    Text("处理中…")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                        .lineLimit(1)
+                } else if record.status == "failed" {
+                    Text("处理失败，将重试")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(1)
+                } else if record.sourceLanguage != "english" {
                     Text(record.sourceText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -634,6 +663,18 @@ private struct SettingsTab: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
                 }
+
+                Divider()
+
+                HStack {
+                    Text("Version")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(appVersionLabel)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
             }
         } label: {
             Label("AI Provider", systemImage: "cpu")
@@ -657,6 +698,13 @@ private struct SettingsTab: View {
                     .font(.callout)
             }
         }
+    }
+
+    private var appVersionLabel: String {
+        let info = Bundle.main.infoDictionary
+        let shortVersion = info?["CFBundleShortVersionString"] as? String ?? "0.0"
+        let buildVersion = info?["CFBundleVersion"] as? String ?? "0"
+        return "v\(shortVersion) (\(buildVersion))"
     }
 
 }

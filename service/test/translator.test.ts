@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectLanguage, translateToEnglish } from '../src/translator.js';
+import { detectLanguage, restoreChineseFromRomanized, translateToEnglish } from '../src/translator.js';
 
 test('detects chinese text', () => {
   assert.equal(detectLanguage('今天我很开心'), 'chinese');
@@ -15,4 +15,15 @@ test('falls back safely when no remote translator is configured', async () => {
 
   assert.equal(result.sourceLanguage, 'chinese');
   assert.match(result.englishText, /Translation pending/);
+});
+
+test('does not attempt romanized restoration without a provider', async () => {
+  const result = await restoreChineseFromRomanized('jintian hen kaixin', {
+    baseUrl: '',
+    apiKey: '',
+    model: 'gpt-4.1-mini',
+  });
+
+  assert.equal(result.restoredText, 'jintian hen kaixin');
+  assert.equal(result.didRestore, false);
 });

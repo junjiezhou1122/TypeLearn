@@ -12,7 +12,13 @@ export async function loadState(): Promise<PersistedState> {
     const parsed = JSON.parse(raw) as Partial<PersistedState>;
 
     return {
-      records: parsed.records ?? [],
+      records: (parsed.records ?? []).map((record) => ({
+        ...record,
+        restoredText: record.restoredText ?? null,
+        status: record.status ?? 'done',
+        retryCount: record.retryCount ?? 0,
+        lastError: record.lastError ?? null,
+      })),
       stories: parsed.stories ?? [],
       settings: {
         ...defaultProviderSettings,
