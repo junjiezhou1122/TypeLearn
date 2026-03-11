@@ -7,10 +7,6 @@ import type { PersistedState } from './types.js';
 
 const maxRetries = 3;
 const baseRetryDelayMs = 1500;
-const processingSuggestion = 'Processing…';
-const processingExplanation = 'TypeLearn is converting your capture in the background.';
-const failedSuggestion = 'Processing failed';
-const failedExplanation = 'TypeLearn will retry this capture in the background.';
 
 export class LearningStore {
   #state: PersistedState = {
@@ -40,7 +36,17 @@ export class LearningStore {
   listArtifacts(): LearningArtifact[] {
     return this.#state.records.map((record) => {
       if (record.status !== 'done') {
-        return this.buildProcessingArtifact(record);
+        return {
+          id: record.id,
+          sourceText: record.sourceText,
+          restoredText: record.restoredText ?? null,
+          suggestion: record.status === 'failed' ? 'Processing failed' : 'Processing…',
+          explanation: record.status === 'failed'
+            ? 'TypeLearn will retry this capture in the background.'
+            : 'TypeLearn is converting your capture in the background.',
+          createdAt: record.createdAt,
+          status: record.status,
+        };
       }
 
       const coaching = buildLearningArtifact(record.englishText);
@@ -74,7 +80,18 @@ export class LearningStore {
   }
 
   async addRecord(sourceText: string, sourceApp: string | null, settingsOverride?: ProviderSettings): Promise<CaptureRecord> {
-    const record = this.buildPendingRecord(sourceText, sourceApp);
+    const record: CaptureRecord = {
+      id: crypto.randomUUID(),
+      sourceText,
+      restoredText: null,
+      englishText: 'Processing…',
+      sourceLanguage: 'unknown',
+      sourceApp,
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+      retryCount: 0,
+      lastError: null,
+    };
 
     this.#state.records.unshift(record);
     await saveState(this.#state);
@@ -122,34 +139,6 @@ export class LearningStore {
 
   list(): LearningArtifact[] {
     return this.listArtifacts();
-  }
-
-  private buildPendingRecord(sourceText: string, sourceApp: string | null): CaptureRecord {
-    return {
-      id: crypto.randomUUID(),
-      sourceText,
-      restoredText: null,
-      englishText: processingSuggestion,
-      sourceLanguage: 'unknown',
-      sourceApp,
-      createdAt: new Date().toISOString(),
-      status: 'pending',
-      retryCount: 0,
-      lastError: null,
-    };
-  }
-
-  private buildProcessingArtifact(record: CaptureRecord): LearningArtifact {
-    const isFailed = record.status === 'failed';
-    return {
-      id: record.id,
-      sourceText: record.sourceText,
-      restoredText: record.restoredText ?? null,
-      suggestion: isFailed ? failedSuggestion : processingSuggestion,
-      explanation: isFailed ? failedExplanation : processingExplanation,
-      createdAt: record.createdAt,
-      status: record.status,
-    };
   }
 
   private scheduleRetry(recordId: string, retryCount: number): void {

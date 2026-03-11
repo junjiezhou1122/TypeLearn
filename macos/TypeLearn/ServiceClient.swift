@@ -146,7 +146,10 @@ final class ServiceClient {
             var request = URLRequest(url: baseURL.appending(path: "artifacts"))
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONEncoder().encode(makeArtifactRequest(sourceText: trimmed, sourceApp: sourceApp))
+            let settingsPayload = settings.baseUrl.isEmpty ? nil : settings
+            request.httpBody = try JSONEncoder().encode(
+                ArtifactCreateRequest(sourceText: trimmed, sourceApp: sourceApp, settings: settingsPayload)
+            )
 
             let (data, response) = try await session.data(for: request)
             let httpResponse = response as? HTTPURLResponse
@@ -298,8 +301,4 @@ final class ServiceClient {
         try? await loadRecords()
     }
 
-    private func makeArtifactRequest(sourceText: String, sourceApp: String?) -> ArtifactCreateRequest {
-        let settingsPayload = settings.baseUrl.isEmpty ? nil : settings
-        return ArtifactCreateRequest(sourceText: sourceText, sourceApp: sourceApp, settings: settingsPayload)
-    }
 }
