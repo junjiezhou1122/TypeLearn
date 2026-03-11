@@ -1,6 +1,7 @@
 <div align="center">
 
 # TypeLearn
+![alt text](image.png)
 
 ### Learn English from every keystroke.
 
@@ -18,7 +19,7 @@ A privacy-first macOS menu bar app that transforms your daily typing into contin
 
 <br/>
 
-[Getting Started](#-getting-started) · [Architecture](#-architecture) · [API Reference](#-api-reference) · [Privacy](#-privacy)
+[Getting Started](#getting-started) · [Architecture](#architecture) · [API Reference](#api-reference) · [Privacy](#privacy)
 
 </div>
 
