@@ -1,0 +1,21 @@
+{
+  "name": "typelearn",
+  "version": "0.1.0",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.2"
+  },
+  "workspaces": [
+    "service",
+    "shared"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:service": "npm run dev --workspace service",
+    "dev:app": "node scripts/dev-app.js"
+  }
+}

@@ -1,0 +1,21 @@
+commands:
+  install: test -f package.json && npm install || echo "package.json not created yet; skipping install during bootstrap"
+  lint: test -f package.json && npm run lint || echo "lint unavailable until bootstrap creates package.json"
+  typecheck: test -f package.json && npm run typecheck || echo "typecheck unavailable until bootstrap creates package.json"
+  test: test -f package.json && npm run test || echo "tests unavailable until bootstrap creates package.json"
+  build: test -f package.json && npm run build || echo "build unavailable until bootstrap creates package.json"
+
+services:
+  orchestrator-service:
+    start: test -f package.json && PORT=43010 HOST=127.0.0.1 npm run dev:service || echo "service package not scaffolded yet"
+    stop: lsof -ti :43010 | xargs kill
+    healthcheck: test -f package.json && curl -sf http://127.0.0.1:43010/health || echo "service healthcheck unavailable before scaffold"
+    port: 43010
+    depends_on: []
+
+  app-preview:
+    start: test -f package.json && PORT=43011 HOST=127.0.0.1 npm run dev:app || echo "app preview unavailable before scaffold"
+    stop: lsof -ti :43011 | xargs kill
+    healthcheck: test -f package.json && curl -sf http://127.0.0.1:43011/health || echo "app preview healthcheck unavailable before scaffold"
+    port: 43011
+    depends_on: [orchestrator-service]

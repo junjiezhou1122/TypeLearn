@@ -1,0 +1,256 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00100010000000000000001 /* TypeLearnApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000001 /* TypeLearnApp.swift */; };
+		A00100010000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000002 /* ContentView.swift */; };
+		A00100010000000000000003 /* OnboardingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000003 /* OnboardingViewModel.swift */; };
+		A00100010000000000000004 /* PermissionMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000005 /* PermissionMonitor.swift */; };
+		A00100010000000000000005 /* ServiceClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000006 /* ServiceClient.swift */; };
+		A00100010000000000000006 /* CaptureMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000007 /* CaptureMonitor.swift */; };
+		A00100010000000000000007 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00100020000000000000008 /* AppModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A00100000000000000000001 /* TypeLearn.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TypeLearn.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00100020000000000000001 /* TypeLearnApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeLearnApp.swift; sourceTree = "<group>"; };
+		A00100020000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00100020000000000000003 /* OnboardingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingViewModel.swift; sourceTree = "<group>"; };
+		A00100020000000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A00100020000000000000005 /* PermissionMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionMonitor.swift; sourceTree = "<group>"; };
+		A00100020000000000000006 /* ServiceClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceClient.swift; sourceTree = "<group>"; };
+		A00100020000000000000007 /* CaptureMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMonitor.swift; sourceTree = "<group>"; };
+		A00100020000000000000008 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00100030000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00100040000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A00100040000000000000002 /* TypeLearn */,
+				A00100040000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00100040000000000000002 /* TypeLearn */ = {
+			isa = PBXGroup;
+			children = (
+				A00100020000000000000001 /* TypeLearnApp.swift */,
+				A00100020000000000000002 /* ContentView.swift */,
+				A00100020000000000000003 /* OnboardingViewModel.swift */,
+				A00100020000000000000005 /* PermissionMonitor.swift */,
+				A00100020000000000000006 /* ServiceClient.swift */,
+				A00100020000000000000007 /* CaptureMonitor.swift */,
+				A00100020000000000000008 /* AppModel.swift */,
+				A00100020000000000000004 /* Info.plist */,
+			);
+			path = TypeLearn;
+			sourceTree = "<group>";
+		};
+		A00100040000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00100000000000000000001 /* TypeLearn.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00100050000000000000001 /* TypeLearn */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00100080000000000000001 /* Build configuration list for PBXNativeTarget "TypeLearn" */;
+			buildPhases = (
+				A00100060000000000000001 /* Sources */,
+				A00100030000000000000001 /* Frameworks */,
+				A00100070000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A00100040000000000000002 /* TypeLearn */,
+			);
+			name = TypeLearn;
+			packageProductDependencies = (
+			);
+			productName = TypeLearn;
+			productReference = A00100000000000000000001 /* TypeLearn.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00100090000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					A00100050000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = A00100080000000000000002 /* Build configuration list for PBXProject "TypeLearn" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A00100040000000000000001;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A00100040000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00100050000000000000001 /* TypeLearn */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00100070000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00100060000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100010000000000000002 /* ContentView.swift in Sources */,
+				A00100010000000000000003 /* OnboardingViewModel.swift in Sources */,
+				A00100010000000000000004 /* PermissionMonitor.swift in Sources */,
+				A00100010000000000000005 /* ServiceClient.swift in Sources */,
+				A00100010000000000000006 /* CaptureMonitor.swift in Sources */,
+				A00100010000000000000007 /* AppModel.swift in Sources */,
+				A00100010000000000000001 /* TypeLearnApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A001000A0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TypeLearn/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.factory.typelearn;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A001000A0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TypeLearn/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = "@executable_path/../Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.factory.typelearn;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A001000A0000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A001000A0000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00100080000000000000001 /* Build configuration list for PBXNativeTarget "TypeLearn" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A001000A0000000000000001 /* Debug */,
+				A001000A0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00100080000000000000002 /* Build configuration list for PBXProject "TypeLearn" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A001000A0000000000000003 /* Debug */,
+				A001000A0000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00100090000000000000001 /* Project object */;
+}
