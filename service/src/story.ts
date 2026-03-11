@@ -1,7 +1,7 @@
 import type { CaptureRecord, ProviderSettings, StoryArtifact } from '../../shared/src/index';
 
 export async function generateDailyStory(records: CaptureRecord[], settings: ProviderSettings): Promise<StoryArtifact> {
-  const todayRecords = records.filter((record) => isToday(record.createdAt));
+  const todayRecords = records.filter((record) => isToday(record.createdAt) && record.status === 'done');
   const englishLines = todayRecords.map((record) => `- ${record.englishText}`).join('\n');
 
   const fallbackStory = buildFallbackStory(todayRecords);
@@ -23,11 +23,11 @@ export async function generateDailyStory(records: CaptureRecord[], settings: Pro
         messages: [
           {
             role: 'system',
-            content: 'You are an English coach. Write a short, coherent English story using the user\'s translated lines from today. Return only the story text.',
+            content: 'You are an English coach. Write a short, coherent English story inspired by the user\'s lines from today. You may omit or combine lines for clarity. Return only the story text.',
           },
           {
             role: 'user',
-            content: `Use today\'s English lines:\n${englishLines}`,
+            content: `Today\'s English lines:\n${englishLines}`,
           },
         ],
       }),
