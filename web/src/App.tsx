@@ -205,101 +205,113 @@ export default function App() {
         .scroll-area {
           flex: 1;
           overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+          gap: 1.5rem;
           padding-right: 1rem;
+          align-content: start;
         }
         
         /* Artifact Card Styles */
         .artifact-card {
           background: white;
           border: 1px solid var(--border);
-          padding: 2rem;
-          border-radius: 4px;
-          transition: all 0.3s ease;
+          padding: 1.25rem;
+          border-radius: 8px;
+          transition: all 0.2s ease-out;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+          position: relative;
         }
         
         .artifact-card:hover {
-          box-shadow: 0 12px 24px rgba(0,0,0,0.03);
           border-color: var(--accent);
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(0,0,0,0.03);
         }
         
         .card-meta {
-          font-size: 0.8rem;
+          font-size: 0.7rem;
           color: var(--text-secondary);
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          margin-bottom: 1.5rem;
           display: flex;
           justify-content: space-between;
+          border-bottom: 1px solid var(--bg-secondary);
+          padding-bottom: 0.5rem;
         }
         
         .card-content {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 2rem;
-          margin-bottom: 2rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
         }
         
         .text-group h4 {
-          font-size: 0.75rem;
+          font-size: 0.65rem;
           text-transform: uppercase;
           color: var(--text-secondary);
-          margin-bottom: 0.75rem;
+          margin-bottom: 0.25rem;
+          opacity: 0.7;
         }
         
         .source-text {
           font-family: var(--font-serif);
-          font-size: 1.1rem;
-          line-height: 1.6;
+          font-size: 0.95rem;
+          line-height: 1.4;
           color: var(--text-secondary);
           text-decoration: line-through decoration-thickness(1px) color(var(--error));
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.25rem;
         }
 
         .restored-context {
           display: flex;
-          align-items: baseline;
+          align-items: center;
           gap: 0.5rem;
-          padding: 0.5rem 0.75rem;
+          padding: 0.35rem 0.5rem;
           background: var(--bg-secondary);
           border-radius: 4px;
-          border-left: 2px solid var(--accent);
         }
 
         .context-label {
-          font-size: 0.7rem;
+          font-size: 0.6rem;
           text-transform: uppercase;
-          font-weight: 600;
+          font-weight: 700;
           color: var(--accent);
           flex-shrink: 0;
         }
 
         .chinese-text {
-          font-size: 1rem;
-          color: var(--text-primary);
-        }
-        
-        .suggested-text {
-          font-family: var(--font-serif);
-          font-size: 1.2rem;
-          line-height: 1.6;
+          font-size: 0.9rem;
           color: var(--text-primary);
           font-weight: 500;
         }
         
+        .suggested-text {
+          font-family: var(--font-serif);
+          font-size: 1.1rem;
+          line-height: 1.4;
+          color: var(--text-primary);
+          font-weight: 600;
+        }
+        
         .explanation {
-          border-top: 1px solid var(--border);
-          padding-top: 1.5rem;
-          font-size: 0.95rem;
-          line-height: 1.6;
+          font-size: 0.8rem;
+          line-height: 1.4;
           color: var(--text-secondary);
+          font-style: italic;
+          opacity: 0.8;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
         }
 
         .story-card {
+          grid-column: 1 / -1;
           background: var(--bg-secondary);
-          padding: 2.5rem;
+          padding: 2rem;
           border-radius: 8px;
         }
         
@@ -359,31 +371,35 @@ export default function App() {
 }
 
 function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
+  const isGeneric = artifact.explanation.includes('normalized capitalization');
+  
   return (
     <article className="artifact-card">
       <div className="card-meta">
-        <span>Learning Insight</span>
+        <span>Insight</span>
         <span>{new Date(artifact.createdAt).toLocaleDateString()}</span>
       </div>
       <div className="card-content">
         <div className="text-group">
-          <h4>Original Input</h4>
+          <h4>Input</h4>
           <p className="source-text serif">{artifact.sourceText}</p>
           {artifact.restoredText && (
             <div className="restored-context">
-              <span className="context-label">Context:</span>
+              <span className="context-label">ZH</span>
               <span className="chinese-text serif">{artifact.restoredText}</span>
             </div>
           )}
         </div>
         <div className="text-group">
-          <h4>Suggested English</h4>
+          <h4>Suggested</h4>
           <p className="suggested-text serif">{artifact.suggestion}</p>
         </div>
       </div>
-      <div className="explanation">
-        <p>{artifact.explanation}</p>
-      </div>
+      {!isGeneric && (
+        <div className="explanation">
+          <p>{artifact.explanation}</p>
+        </div>
+      )}
     </article>
   );
 }
