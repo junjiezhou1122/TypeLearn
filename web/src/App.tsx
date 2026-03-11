@@ -87,7 +87,15 @@ export default function App() {
 }
 
 function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
-  const isGeneric = artifact.explanation.includes('normalized capitalization');
+  const genericMessages = [
+    'normalized capitalization',
+    'already looks clear',
+    'kept it as-is'
+  ];
+  
+  const isGeneric = genericMessages.some(msg => 
+    artifact.explanation.toLowerCase().includes(msg.toLowerCase())
+  );
   
   return (
     <article className="card">
