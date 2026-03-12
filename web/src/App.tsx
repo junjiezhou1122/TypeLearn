@@ -143,7 +143,6 @@ function InboxView({ artifacts }: { artifacts: LearningArtifact[] }) {
 function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
   const isExpression = artifact.type === 'Expression';
   const variantClass = isExpression ? 'variant-expression' : 'variant-refinement';
-  
   const genericMessages = ['normalized capitalization', 'already looks clear', 'kept it as-is', 'natural in everyday writing'];
   const shouldShowExplanation = artifact.explanation && !genericMessages.some(msg => 
     artifact.explanation.toLowerCase().includes(msg.toLowerCase())
@@ -192,9 +191,9 @@ function StoryView({ stories }: { stories: StoryArtifact[] }) {
   return (
     <div className="story-page">
       <div className="story-navigation">
-        <button className="nav-button" onClick={() => setIdx(idx + 1)} disabled={idx === stories.length - 1}><ChevronLeft size={16}/> Previous</button>
+        <button className="button-primary nav-button" onClick={() => setIdx(idx + 1)} disabled={idx === stories.length - 1}><ChevronLeft size={16}/> Previous</button>
         <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#aaa' }}>{stories.length - idx} / {stories.length}</span>
-        <button className="nav-button" onClick={() => setIdx(idx - 1)} disabled={idx === 0}>Next <ChevronRight size={16}/></button>
+        <button className="button-primary nav-button" onClick={() => setIdx(idx - 1)} disabled={idx === 0}>Next <ChevronRight size={16}/></button>
       </div>
       <article className="story-doc fade-in" key={story.id}>
         <h1 className="serif">{story.title}</h1>
@@ -221,20 +220,45 @@ function SettingsView({ settings, onUpdate }: { settings: ProviderSettings, onUp
   };
 
   return (
-    <div style={{ maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      <div>
-        <label className="label-small" style={{ color: '#aaa', display: 'block', marginBottom: '8px' }}>Base URL</label>
-        <input value={form.baseUrl} onChange={e => setForm({...form, baseUrl: e.target.value})} />
+    <div className="settings-wrapper">
+      <div className="settings-section">
+        <div className="settings-row">
+          <div className="settings-info">
+            <label>Base URL</label>
+            <div className="desc">The endpoint address for your AI provider.</div>
+          </div>
+          <div className="settings-input-area">
+            <input value={form.baseUrl} onChange={e => setForm({...form, baseUrl: e.target.value})} placeholder="http://localhost:11434" />
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-info">
+            <label>API Key</label>
+            <div className="desc">Your secret key for authentication.</div>
+          </div>
+          <div className="settings-input-area">
+            <input type="password" value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} placeholder="sk-..." />
+          </div>
+        </div>
+
+        <div className="settings-row">
+          <div className="settings-info">
+            <label>Model Name</label>
+            <div className="desc">The specific AI model to use for translations.</div>
+          </div>
+          <div className="settings-input-area">
+            <input value={form.model} onChange={e => setForm({...form, model: e.target.value})} placeholder="gpt-4o" />
+          </div>
+        </div>
       </div>
-      <div>
-        <label className="label-small" style={{ color: '#aaa', display: 'block', marginBottom: '8px' }}>API Key</label>
-        <input type="password" value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} />
+
+      <div className="settings-row" style={{ marginTop: '1rem' }}>
+        <div className="settings-info"></div>
+        <div className="settings-input-area">
+          <button className="button-primary" onClick={save}>Save Changes</button>
+        </div>
       </div>
-      <div>
-        <label className="label-small" style={{ color: '#aaa', display: 'block', marginBottom: '8px' }}>Model</label>
-        <input value={form.model} onChange={e => setForm({...form, model: e.target.value})} />
-      </div>
-      <button className="button-primary" onClick={save} style={{ alignSelf: 'flex-start', borderRadius: '12px' }}>Save Changes</button>
     </div>
   );
 }
