@@ -1,160 +1,257 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCcw } from 'lucide-react';
-import type { LearningArtifact, StoryArtifact, ProviderSettings } from './types';
+import { 
+  Inbox,
+  Library, 
+  Book, 
+  Settings, 
+  RefreshCcw,
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  MessageCircle,
+  Zap
+} from 'lucide-react';
+import type { 
+  LearningArtifact, 
+  StoryArtifact, 
+  ProviderSettings,
+  ArtifactType,
+  ArtifactCategory 
+} from './types';
 
 const API_BASE = 'http://localhost:43010';
 
+type ViewType = 'inbox' | 'library' | 'story' | 'settings';
+type FilterType = 'all' | 'english' | 'chinese';
+
 export default function App() {
-  const [view, setView] = useState<'insights' | 'stories' | 'settings'>('insights');
+  const [view, setView] = useState<ViewType>('inbox');
   const [artifacts, setArtifacts] = useState<LearningArtifact[]>([]);
   const [stories, setStories] = useState<StoryArtifact[]>([]);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
-  const fetchData = async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
+  const fetchData = async () => {
+    setLoading(true);
     try {
       const [artRes, storyRes, setRes] = await Promise.all([
         fetch(`${API_BASE}/artifacts`),
         fetch(`${API_BASE}/stories`),
         fetch(`${API_BASE}/settings`)
       ]);
-      setArtifacts((await artRes.json()).items || []);
+      
+      const arts = (await artRes.json()).items || [];
+      const transformedArts: LearningArtifact[] = arts.map((a: any) => ({
+        ...a,
+        type: a.restoredText ? 'Expression' : 'Refinement',
+        category: a.category,
+        intentText: a.restoredText,
+        keyPhrases: a.keyPhrases || []
+      }));
+      
+      setArtifacts(transformedArts);
       setStories((await storyRes.json()).items || []);
       setSettings(await setRes.json());
     } catch (error) {
       console.error('Failed to fetch:', error);
     } finally {
       setLoading(false);
-      setIsFirstLoad(false);
     }
   };
 
-  useEffect(() => { 
-    fetchData(); 
-    // 每 5 秒自动静默刷新一次数据
-    const timer = setInterval(() => fetchData(true), 5000);
-    return () => clearInterval(timer);
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   return (
     <div className="app-container">
       <aside className="sidebar">
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '2rem', paddingLeft: '1rem' }}>TypeLearn</h2>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <button className={`nav-item ${view === 'insights' ? 'active' : ''}`} onClick={() => setView('insights')}>
-            Insights
-          </button>
-          <button className={`nav-item ${view === 'stories' ? 'active' : ''}`} onClick={() => setView('stories')}>
-            Stories
-          </button>
-          <button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => setView('settings')}>
-            Settings
-          </button>
+        <h2>TypeLearn</h2>
+        <nav className="nav-group">
+          <NavItem active={view === 'inbox'} icon={<Inbox size={18}/>} label="Inbox" onClick={() => setView('inbox')} />
+          <NavItem active={view === 'library'} icon={<Library size={18}/>} label="Library" onClick={() => setView('library')} />
+          <NavItem active={view === 'story'} icon={<Book size={18}/>} label="Story" onClick={() => setView('story')} />
+          <NavItem active={view === 'settings'} icon={<Settings size={18}/>} label="Settings" onClick={() => setView('settings')} />
         </nav>
+        
         <div style={{ marginTop: 'auto', padding: '1rem' }}>
-          <button onClick={fetchData} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#999', fontSize: '0.8rem' }}>
+          <button onClick={fetchData} className="nav-item" style={{ width: '100%', fontSize: '0.8rem', color: '#999' }}>
             <RefreshCcw size={14} className={loading ? 'spinning' : ''} />
-            <span>Sync</span>
+            <span style={{ marginLeft: '8px' }}>Sync Progress</span>
           </button>
         </div>
       </aside>
 
       <main className="main-content">
-        <header>
-          <h1>{view === 'insights' ? 'Learning Insights' : view === 'stories' ? 'Daily Stories' : 'Configuration'}</h1>
-          <p className="subtitle">
-            {view === 'insights' && "Refined suggestions from your daily computer usage."}
-            {view === 'stories' && "A narrative overview of your recent progress."}
-            {view === 'settings' && "Configure AI engine and preferences."}
-          </p>
-        </header>
-
-        <section className="artifacts-grid">
-          {isFirstLoad && loading ? (
-            <div style={{ color: '#999', fontSize: '0.9rem', padding: '2rem' }}>Loading Insights...</div>
-          ) : (
-            <>
-              {view === 'insights' && artifacts.map(art => (
-                <ArtifactCard key={art.id} artifact={art} />
-              ))}
-              {view === 'stories' && stories.map(story => (
-                <StoryCard key={story.id} story={story} />
-              ))}
-              {view === 'settings' && settings && (
-                <SettingsView settings={settings} onUpdate={setSettings} />
-              )}
-            </>
-          )}
-        </section>
+        <Header view={view} />
+        
+        <div className="fade-in">
+          {view === 'inbox' && <InboxView artifacts={artifacts} />}
+          {view === 'library' && <LibraryView artifacts={artifacts.filter(a => a.isSaved)} />}
+          {view === 'story' && <StoryView stories={stories} />}
+          {view === 'settings' && settings && <SettingsView settings={settings} onUpdate={setSettings} />}
+        </div>
       </main>
     </div>
   );
 }
 
-function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
-  const genericMessages = [
-    'normalized capitalization',
-    'already looks clear',
-    'kept it as-is'
-  ];
-  
-  const isGeneric = genericMessages.some(msg => 
-    artifact.explanation.toLowerCase().includes(msg.toLowerCase())
-  );
-
-  const isFailed = artifact.status === 'failed';
-  
+function NavItem({ active, icon, label, onClick }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void }) {
   return (
-    <article className={`card ${isFailed ? 'failed-state' : ''}`}>
-      <div className="card-header">
-        <span>Insight</span>
-        <span>{new Date(artifact.createdAt).toLocaleDateString()}</span>
-      </div>
-      
-      <div className="learning-flow">
-        <div className="flow-step">
-          <label>Raw Input</label>
-          <div className="original-box serif">{artifact.sourceText}</div>
-        </div>
-
-        {artifact.restoredText && (
-          <div className="flow-step">
-            <label>Chinese Context</label>
-            <div className="chinese-box serif">{artifact.restoredText}</div>
-          </div>
-        )}
-
-        <div className="flow-step highlight">
-          <label>English Suggestion</label>
-          <div className={`suggested-box serif ${isFailed ? 'error' : ''}`}>
-            {artifact.suggestion}
-          </div>
-        </div>
-      </div>
-      
-      {!isGeneric && (
-        <div className="explanation-text">
-          {artifact.explanation}
-        </div>
-      )}
-    </article>
+    <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
+      {icon}
+      <span>{label}</span>
+    </button>
   );
 }
 
-function StoryCard({ story }: { story: StoryArtifact }) {
+function Header({ view }: { view: ViewType }) {
+  const titles = {
+    inbox: "Capture Inbox",
+    library: "Library",
+    story: "Narrative",
+    settings: "Config"
+  };
   return (
-    <article className="card" style={{ gridColumn: '1 / -1' }}>
-      <div className="card-header" style={{ marginBottom: '1rem' }}>
-        <span>Story</span>
-        <span>{new Date(story.createdAt).toLocaleDateString()}</span>
+    <header>
+      <h1>{titles[view]}</h1>
+    </header>
+  );
+}
+
+function InboxView({ artifacts }: { artifacts: LearningArtifact[] }) {
+  const [filter, setFilter] = useState<FilterType>('all');
+
+  const filteredArtifacts = artifacts.filter(a => {
+    if (filter === 'all') return true;
+    if (filter === 'english') return a.type === 'Refinement';
+    if (filter === 'chinese') return a.type === 'Expression';
+    return true;
+  });
+
+  return (
+    <div className="view-inbox">
+      <div className="filter-bar">
+        <button className={`filter-tab ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
+        <button className={`filter-tab ${filter === 'english' ? 'active' : ''}`} onClick={() => setFilter('english')}>English</button>
+        <button className={`filter-tab ${filter === 'chinese' ? 'active' : ''}`} onClick={() => setFilter('chinese')}>Chinese</button>
       </div>
-      <h3 style={{ marginBottom: '1rem' }}>{story.title}</h3>
-      <p className="serif" style={{ fontSize: '1.1rem', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
-        {story.story}
-      </p>
-    </article>
+
+      <div className="content-grid">
+        {filteredArtifacts.length > 0 ? (
+          filteredArtifacts.map(a => <ArtifactCard key={a.id} artifact={a} />)
+        ) : (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: '#999' }}>
+            <Archive size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+            <p>Empty inbox.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
+  const isExpression = artifact.type === 'Expression';
+  const variantClass = isExpression ? 'variant-expression' : 'variant-refinement';
+  
+  const genericMessages = [
+    'normalized capitalization',
+    'already looks clear',
+    'kept it as-is',
+    'natural in everyday writing'
+  ];
+  
+  const shouldShowExplanation = artifact.explanation && !genericMessages.some(msg => 
+    artifact.explanation.toLowerCase().includes(msg.toLowerCase())
+  );
+  
+  return (
+    <div className={`artifact-card-container ${variantClass}`}>
+      <article className="artifact-card">
+        <div className="card-header-icon" style={{ backgroundColor: isExpression ? '#fff0f3' : '#f0f7ff' }}>
+          {isExpression ? <MessageCircle size={16} color="#ff4d6d" /> : <Zap size={16} color="#0077ff" />}
+        </div>
+
+        <div className="card-body">
+          {isExpression ? (
+            <div className="expression-body">
+              <div className="input-block">
+                <label>Intent</label>
+                <div className="intent-text serif">{artifact.intentText}</div>
+              </div>
+              <div className="input-block" style={{ marginTop: '1rem' }}>
+                <label>English</label>
+                <div className="suggestion-text serif">{artifact.suggestion}</div>
+              </div>
+            </div>
+          ) : (
+            <div className="refinement-body">
+              <div className="input-block">
+                <label>Draft</label>
+                <div className="source-text serif">{artifact.sourceText}</div>
+              </div>
+              <div className="input-block" style={{ marginTop: '1rem' }}>
+                <label>Refined</label>
+                <div className="suggestion-text serif">{artifact.suggestion}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {shouldShowExplanation && (
+          <div className="explanation-block">
+            {artifact.explanation}
+          </div>
+        )}
+
+        <div className="card-footer">
+          <span className="footer-label">{new Date(artifact.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            {artifact.keyPhrases?.slice(0, 2).map(phrase => (
+              <span key={phrase} className="key-phrase-pill">{phrase}</span>
+            ))}
+          </div>
+        </div>
+      </article>
+    </div>
+  );
+}
+
+function LibraryView({ artifacts }: { artifacts: LearningArtifact[] }) {
+  return (
+    <div className="content-grid">
+      {artifacts.map(a => <ArtifactCard key={a.id} artifact={a} />)}
+    </div>
+  );
+}
+
+function StoryView({ stories }: { stories: StoryArtifact[] }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const currentStory = stories[currentIndex];
+
+  if (!currentStory) return <div style={{ padding: '4rem', textAlign: 'center' }}>No stories yet.</div>;
+
+  return (
+    <div className="story-viewer">
+      <div className="story-navigation" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+        <button className="nav-button" disabled={currentIndex === stories.length - 1} onClick={() => setCurrentIndex(currentIndex + 1)}>
+          <ChevronLeft size={16} /> Prev
+        </button>
+        <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>{stories.length - currentIndex} / {stories.length}</span>
+        <button className="nav-button" disabled={currentIndex === 0} onClick={() => setCurrentIndex(currentIndex - 1)}>
+          Next <ChevronRight size={16} />
+        </button>
+      </div>
+
+      <article className="story-card fade-in" key={currentStory.id}>
+        <div className="story-header" style={{ textAlign: 'center', marginBottom: '3rem' }}>
+          <h2 className="serif" style={{ fontSize: '2rem', fontWeight: 800 }}>{currentStory.title}</h2>
+          <div style={{ color: '#aaa', fontSize: '0.9rem', marginTop: '0.5rem' }}>{new Date(currentStory.createdAt).toLocaleDateString()}</div>
+        </div>
+        <div className="story-content serif" style={{ fontSize: '1.2rem', lineHeight: '1.8' }}>
+          {currentStory.story.split('\n').map((p, i) => <p key={i} style={{ marginBottom: '1.5rem' }}>{p}</p>)}
+        </div>
+      </article>
+    </div>
   );
 }
 
@@ -172,26 +269,25 @@ function SettingsView({ settings, onUpdate }: {
       });
       if (res.ok) { onUpdate(form); alert('Saved.'); }
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      alert('Failed.');
+      console.error(error);
     }
   };
 
   return (
-    <div style={{ gridColumn: '1 / -1', maxWidth: '600px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Base URL</label>
-        <input style={{ padding: '0.75rem', border: '1px solid #eee', borderRadius: '8px' }} value={form.baseUrl} onChange={e => setForm({...form, baseUrl: e.target.value})} />
+    <div style={{ maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      <div className="input-group">
+        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#aaa', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>Base URL</label>
+        <input value={form.baseUrl} onChange={e => setForm({...form, baseUrl: e.target.value})} />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>API Key</label>
-        <input type="password" style={{ padding: '0.75rem', border: '1px solid #eee', borderRadius: '8px' }} value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} />
+      <div className="input-group">
+        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#aaa', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>API Key</label>
+        <input type="password" value={form.apiKey} onChange={e => setForm({...form, apiKey: e.target.value})} />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Model</label>
-        <input style={{ padding: '0.75rem', border: '1px solid #eee', borderRadius: '8px' }} value={form.model} onChange={e => setForm({...form, model: e.target.value})} />
+      <div className="input-group">
+        <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#aaa', textTransform: 'uppercase', marginBottom: '0.5rem', display: 'block' }}>Model</label>
+        <input value={form.model} onChange={e => setForm({...form, model: e.target.value})} />
       </div>
-      <button style={{ background: '#1a1a1a', color: 'white', padding: '0.75rem', borderRadius: '8px', marginTop: '1rem' }} onClick={save}>Save</button>
+      <button className="button-primary" onClick={save}>Save Changes</button>
     </div>
   );
 }
