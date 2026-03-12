@@ -18,6 +18,7 @@ test('exposes capture records in newest-first order for persisted history', asyn
   const store = new LearningStore();
   await store.updateSettings({ baseUrl: '', apiKey: '', model: 'gpt-4.1-mini' });
   const first = await store.addRecord('今天很开心', 'Notes');
+  await new Promise(resolve => setTimeout(resolve, 2100));
   const second = await store.addRecord('I have a meeting later', 'Xcode');
 
   const records = store.listRecords();

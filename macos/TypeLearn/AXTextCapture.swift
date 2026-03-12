@@ -25,6 +25,9 @@ final class AXTextCapture {
     private var pollTimer: Timer?
     private var previousValue: String = ""
     private var previousElementHash: CFHashCode = 0
+    private var pendingValue: String?
+    private var lastChangeDate: Date = .distantPast
+    private var lastEmittedValue: String = ""
     private var observer: AXObserver?
     private var observerRunLoopSource: CFRunLoopSource?
     private var observedPid: pid_t?
@@ -64,6 +67,9 @@ final class AXTextCapture {
         pollTimer = nil
         previousValue = ""
         previousElementHash = 0
+        pendingValue = nil
+        lastChangeDate = .distantPast
+        lastEmittedValue = ""
         statusMessage = "AX capture is idle."
         debugSelectedText = nil
         debugSelectedRangeText = nil
@@ -111,23 +117,39 @@ final class AXTextCapture {
         if elementHash != previousElementHash {
             previousElementHash = elementHash
             previousValue = currentValue(of: element) ?? ""
+            pendingValue = nil
+            lastChangeDate = .distantPast
+            lastEmittedValue = ""
             return
         }
 
         guard let value = currentValue(of: element) else { return }
-        guard value != previousValue else { return }
+        let now = Date()
 
-        let delta = extractDelta(old: previousValue, new: value)
-        previousValue = value
+        if value != previousValue {
+            previousValue = value
+            if containsNonASCII(value) {
+                pendingValue = value
+                lastChangeDate = now
+            }
+        }
 
-        let trimmed = delta.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else { return }
+        guard let pendingValue else { return }
+        guard now.timeIntervalSince(lastChangeDate) >= 0.6 else { return }
 
-        // Only emit if the delta contains non-ASCII characters (IME output)
-        // to avoid duplicating what the CGEvent tap already captures.
-        let hasNonASCII = trimmed.unicodeScalars.contains { $0.value > 127 }
-        guard hasNonASCII else { return }
+        let trimmed = pendingValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else {
+            self.pendingValue = nil
+            return
+        }
 
+        guard trimmed != lastEmittedValue else {
+            self.pendingValue = nil
+            return
+        }
+
+        lastEmittedValue = trimmed
+        self.pendingValue = nil
         latestCapturedText = trimmed
         latestSourceApp = app.localizedName
         statusMessage = "Captured IME text from \(app.localizedName ?? "the active app")."
@@ -364,5 +386,9 @@ final class AXTextCapture {
             return new
         }
         return ""
+    }
+
+    private func containsNonASCII(_ text: String) -> Bool {
+        return text.unicodeScalars.contains { $0.value > 127 }
     }
 }

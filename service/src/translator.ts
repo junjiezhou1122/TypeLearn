@@ -131,6 +131,19 @@ export async function restoreChineseFromRomanized(sourceText: string, settings: 
   console.log('[restore] API URL: %s', url.toString());
 
   try {
+    if (forcePinyin && normalized.length > 60) {
+      const chunks = splitPinyinInput(normalized, 40);
+      const restoredChunks: string[] = [];
+
+      for (const chunk of chunks) {
+        const chunkResult = await restorePinyinChunk(chunk, settings);
+        restoredChunks.push(chunkResult || chunk);
+      }
+
+      const merged = restoredChunks.join('');
+      return { restoredText: merged, didRestore: containsChinese(merged) };
+    }
+
     const body = {
       model: settings.model,
       messages: [
@@ -256,6 +269,66 @@ export function isLikelyPinyin(sourceText: string): boolean {
   if (!/^[A-Za-z0-9\s]+$/.test(sourceText)) return false;
   if (!/[aeiouAEIOU]/.test(sourceText)) return false;
   return true;
+}
+
+async function restorePinyinChunk(chunk: string, settings: ProviderSettings): Promise<string | null> {
+  const url = resolveChatCompletionsUrl(settings.baseUrl);
+  const response = await fetch(url, {
+    method: 'POST',
+    signal: AbortSignal.timeout(15_000),
+    headers: {
+      'content-type': 'application/json',
+      ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      model: settings.model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a pinyin-to-Chinese converter. Convert the input to natural Simplified Chinese. Reply with ONLY Chinese characters.',
+        },
+        {
+          role: 'user',
+          content: chunk,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await response.json() as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  return payload.choices?.[0]?.message?.content?.trim() || null;
+}
+
+function splitPinyinInput(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) return [text];
+  const parts: string[] = [];
+  if (text.includes(' ')) {
+    const tokens = text.split(/\s+/).filter(Boolean);
+    let current = '';
+    for (const token of tokens) {
+      const next = current ? `${current} ${token}` : token;
+      if (next.length > maxLength && current) {
+        parts.push(current);
+        current = token;
+      } else {
+        current = next;
+      }
+    }
+    if (current) parts.push(current);
+    return parts;
+  }
+
+  for (let index = 0; index < text.length; index += maxLength) {
+    parts.push(text.slice(index, index + maxLength));
+  }
+  return parts;
 }
 
 function containsChinese(sourceText: string): boolean {

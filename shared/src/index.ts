@@ -16,7 +16,7 @@ export interface LearningArtifact {
   status?: CaptureStatus;
 }
 
-export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed';
+export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'filtered';
 
 export interface CaptureRecord {
   id: string;

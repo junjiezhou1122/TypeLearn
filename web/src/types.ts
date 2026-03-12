@@ -5,7 +5,7 @@ export interface LearningArtifact {
   suggestion: string;
   explanation: string;
   createdAt: string;
-  status?: 'pending' | 'processing' | 'done' | 'failed';
+  status?: 'pending' | 'processing' | 'done' | 'failed' | 'filtered';
 }
 
 export interface StoryArtifact {

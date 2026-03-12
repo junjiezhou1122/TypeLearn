@@ -7,6 +7,8 @@ import type { PersistedState } from './types.js';
 
 const maxRetries = 10; // 提高重试上限
 const baseRetryDelayMs = 5000;
+const mergeWindowMs = 2000;
+const maxMergedLength = 100;
 
 export class LearningStore {
   #state: PersistedState = {
@@ -28,7 +30,7 @@ export class LearningStore {
     // 初始化时，将所有非 done 的记录重置为 pending
     this.#state.records = this.#state.records.map((record) => ({
       ...record,
-      status: record.status === 'done' ? 'done' : 'pending',
+      status: record.status === 'done' || record.status === 'filtered' ? record.status : 'pending',
     }));
     
     await saveState(this.#state);
@@ -86,7 +88,9 @@ export class LearningStore {
   }
 
   listArtifacts(): LearningArtifact[] {
-    return this.#state.records.map((record) => {
+    return this.#state.records
+      .filter((record) => record.status !== 'filtered')
+      .map((record) => {
       if (record.status !== 'done') {
         return {
           id: record.id,
@@ -110,11 +114,11 @@ export class LearningStore {
         createdAt: record.createdAt,
         status: record.status,
       };
-    });
+      });
   }
 
   listRecords(): CaptureRecord[] {
-    return [...this.#state.records];
+    return this.#state.records.filter((record) => record.status !== 'filtered');
   }
 
   listStories(): StoryArtifact[] {
@@ -132,14 +136,51 @@ export class LearningStore {
   }
 
   async addRecord(sourceText: string, sourceApp: string | null, settingsOverride?: ProviderSettings): Promise<CaptureRecord> {
+    const cleaned = cleanCaptureInput(sourceText);
+    const now = new Date().toISOString();
+
+    if (!cleaned) {
+      return {
+        id: crypto.randomUUID(),
+        sourceText,
+        restoredText: null,
+        englishText: '',
+        sourceLanguage: 'unknown',
+        sourceApp,
+        createdAt: now,
+        status: 'filtered',
+        retryCount: 0,
+        lastError: null,
+      };
+    }
+
+    const latest = this.#state.records[0];
+    if (latest && shouldMerge(latest, now)) {
+      const merged = mergeCaptureText(latest.sourceText, cleaned);
+      this.#state.records[0] = {
+        ...latest,
+        sourceText: merged,
+        restoredText: null,
+        englishText: 'Processing…',
+        sourceLanguage: 'unknown',
+        createdAt: now,
+        status: 'pending',
+        retryCount: 0,
+        lastError: null,
+      };
+      await saveState(this.#state);
+      this.enqueue(latest.id, true);
+      return this.#state.records[0];
+    }
+
     const record: CaptureRecord = {
       id: crypto.randomUUID(),
-      sourceText,
+      sourceText: cleaned,
       restoredText: null,
       englishText: 'Processing…',
       sourceLanguage: 'unknown',
       sourceApp,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
       status: 'pending',
       retryCount: 0,
       lastError: null,
@@ -160,7 +201,10 @@ export class LearningStore {
   }
 
   async generateStory(): Promise<StoryArtifact> {
-    const story = await generateDailyStory(this.#state.records, this.#state.settings);
+    const story = await generateDailyStory(
+      this.#state.records.filter((record) => record.status !== 'filtered'),
+      this.#state.settings
+    );
     this.#state.stories.unshift(story);
     await saveState(this.#state);
     return story;
@@ -192,8 +236,20 @@ export class LearningStore {
     let recordIndex = this.#state.records.findIndex((r) => r.id === recordId);
     if (recordIndex === -1) return;
 
-    const record = this.#state.records[recordIndex];
+    let record = this.#state.records[recordIndex];
     if (record.status === 'done') return;
+
+    const cleaned = cleanCaptureInput(record.sourceText);
+    if (!cleaned) {
+      this.#state.records.splice(recordIndex, 1);
+      await saveState(this.#state);
+      return;
+    }
+
+    if (cleaned !== record.sourceText) {
+      record = { ...record, sourceText: cleaned };
+      this.#state.records[recordIndex] = record;
+    }
 
     this.#state.records[recordIndex] = { ...record, status: 'processing' };
     await saveState(this.#state);
@@ -263,4 +319,45 @@ function isLikelyEnglishSentence(sourceText: string): boolean {
   if (tokens.length < 2) return false;
   const common = new Set(['the', 'and', 'to', 'of', 'is', 'are', 'i', 'you', 'we', 'they', 'he', 'she', 'it', 'my', 'your', 'for', 'in', 'on', 'with', 'at']);
   return tokens.some((token) => common.has(token));
+}
+
+function cleanCaptureInput(sourceText: string): string | null {
+  let cleaned = sourceText.trim();
+  if (!cleaned) return null;
+  cleaned = stripToneNumbers(cleaned);
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  if (shouldDropShort(cleaned)) return null;
+  return cleaned;
+}
+
+function stripToneNumbers(sourceText: string): string {
+  return sourceText
+    .replace(/([A-Za-z])[1-5]/g, '$1')
+    .replace(/[1-5]([A-Za-z])/g, '$1');
+}
+
+function shouldDropShort(sourceText: string): boolean {
+  if (/[\u4e00-\u9fff]/.test(sourceText)) return false;
+  if (sourceText.length < 3) return true;
+  if (sourceText.length === 3) {
+    const hasVowel = /[aeiou]/i.test(sourceText);
+    const hasSpace = /\s/.test(sourceText);
+    return !hasVowel || !hasSpace;
+  }
+  return false;
+}
+
+function shouldMerge(record: CaptureRecord, nowIso: string): boolean {
+  if (record.status === 'done' || record.status === 'failed' || record.status === 'filtered') return false;
+  const lastTime = Date.parse(record.createdAt);
+  const nowTime = Date.parse(nowIso);
+  if (Number.isNaN(lastTime) || Number.isNaN(nowTime)) return false;
+  return nowTime - lastTime <= mergeWindowMs;
+}
+
+function mergeCaptureText(previous: string, next: string): string {
+  const needsSpace = previous.length > 0 && !/[\s，。！？,.!?]$/.test(previous);
+  const merged = `${previous}${needsSpace ? ' ' : ''}${next}`.trim();
+  if (merged.length <= maxMergedLength) return merged;
+  return merged.slice(0, maxMergedLength).trim();
 }

@@ -132,6 +132,14 @@ final class CaptureMonitor {
         }
         lastEventDate = now
 
+        let keyCode = event.keyCode
+        if isBackspaceKey(keyCode: keyCode) {
+            if !buffer.isEmpty {
+                buffer.removeLast()
+            }
+            return
+        }
+
         guard let characters = (event.characters?.isEmpty == false ? event.characters : event.charactersIgnoringModifiers),
               !characters.isEmpty else {
             return
@@ -184,6 +192,10 @@ final class CaptureMonitor {
 
     private func handlePointerEvent() {
         flushBuffer(for: lastAppName)
+    }
+
+    private func isBackspaceKey(keyCode: UInt16) -> Bool {
+        return keyCode == 51 || keyCode == 117
     }
 
 }
