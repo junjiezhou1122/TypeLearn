@@ -2,7 +2,7 @@ import type { CaptureRecord, LearningArtifact, ProviderSettings, StoryArtifact }
 import { buildLearningArtifact } from './coaching.js';
 import { loadState, saveState } from './persistence.js';
 import { generateDailyStory } from './story.js';
-import { isLikelyPinyin, restoreChineseFromRomanized, translateToEnglish } from './translator.js';
+import { detectLanguage, isLikelyPinyin, polishEnglishText, restoreChineseFromRomanized, translateToEnglish } from './translator.js';
 import type { PersistedState } from './types.js';
 
 const maxRetries = 10; // 提高重试上限
@@ -51,11 +51,14 @@ export class LearningStore {
     }
   }
 
-  private enqueue(id: string): void {
-    if (!this.#queue.includes(id)) {
+  private enqueue(id: string, priority = false): void {
+    if (this.#queue.includes(id)) return;
+    if (priority) {
+      this.#queue.unshift(id);
+    } else {
       this.#queue.push(id);
-      this.startQueueProcessor();
     }
+    this.startQueueProcessor();
   }
 
   private async startQueueProcessor(): Promise<void> {
@@ -144,7 +147,7 @@ export class LearningStore {
 
     this.#state.records.unshift(record);
     await saveState(this.#state);
-    this.enqueue(record.id);
+    this.enqueue(record.id, true);
     return record;
   }
 
@@ -163,6 +166,28 @@ export class LearningStore {
     return story;
   }
 
+  add(sourceText: string): LearningArtifact {
+    const artifact = buildLearningArtifact(sourceText);
+
+    this.#state.records.unshift({
+      id: artifact.id,
+      sourceText,
+      restoredText: null,
+      englishText: artifact.suggestion,
+      sourceLanguage: 'english',
+      sourceApp: null,
+      createdAt: artifact.createdAt,
+      status: 'done',
+      retryCount: 0,
+      lastError: null,
+    });
+    return artifact;
+  }
+
+  list(): LearningArtifact[] {
+    return this.listArtifacts();
+  }
+
   private async processRecord(recordId: string): Promise<void> {
     let recordIndex = this.#state.records.findIndex((r) => r.id === recordId);
     if (recordIndex === -1) return;
@@ -174,6 +199,26 @@ export class LearningStore {
     await saveState(this.#state);
 
     try {
+      const sourceLanguage = detectLanguage(record.sourceText);
+
+      if (sourceLanguage === 'english' && isLikelyEnglishSentence(record.sourceText)) {
+        const polished = await polishEnglishText(record.sourceText, this.#state.settings);
+
+        recordIndex = this.#state.records.findIndex((item) => item.id === recordId);
+        if (recordIndex === -1) return;
+
+        this.#state.records[recordIndex] = {
+          ...record,
+          restoredText: null,
+          englishText: polished,
+          sourceLanguage: 'english',
+          status: 'done',
+          lastError: null,
+        };
+        await saveState(this.#state);
+        return;
+      }
+
       const restoration = await restoreChineseFromRomanized(record.sourceText, this.#state.settings);
       const textForTranslation = restoration.didRestore ? restoration.restoredText : record.sourceText;
       const translation = await translateToEnglish(textForTranslation, this.#state.settings);
@@ -210,4 +255,12 @@ export class LearningStore {
       console.error(`[Queue] Failed to process ${recordId}, attempt ${nextRetry}. Error: ${error}`);
     }
   }
+}
+
+function isLikelyEnglishSentence(sourceText: string): boolean {
+  const lower = sourceText.toLowerCase();
+  const tokens = lower.split(/[^a-z]+/).filter(Boolean);
+  if (tokens.length < 2) return false;
+  const common = new Set(['the', 'and', 'to', 'of', 'is', 'are', 'i', 'you', 'we', 'they', 'he', 'she', 'it', 'my', 'your', 'for', 'in', 'on', 'with', 'at']);
+  return tokens.some((token) => common.has(token));
 }

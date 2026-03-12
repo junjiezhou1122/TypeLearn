@@ -69,6 +69,49 @@ export async function translateToEnglish(sourceText: string, settings: ProviderS
   }
 }
 
+export async function polishEnglishText(sourceText: string, settings: ProviderSettings): Promise<string> {
+  if (!settings.baseUrl || !settings.model) {
+    return normalizeEnglish(sourceText);
+  }
+
+  try {
+    const response = await fetch(resolveChatCompletionsUrl(settings.baseUrl), {
+      method: 'POST',
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        'content-type': 'application/json',
+        ...(settings.apiKey ? { authorization: `Bearer ${settings.apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model: settings.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Polish the user text into natural, fluent English while preserving meaning. Return only the polished sentence.',
+          },
+          {
+            role: 'user',
+            content: sourceText,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`polish failed with status ${response.status}`);
+    }
+
+    const payload = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+
+    const polished = payload.choices?.[0]?.message?.content?.trim();
+    return polished || normalizeEnglish(sourceText);
+  } catch {
+    return normalizeEnglish(sourceText);
+  }
+}
+
 export async function restoreChineseFromRomanized(sourceText: string, settings: ProviderSettings): Promise<RestorationResult> {
   if (!shouldAttemptRestoration(sourceText)) {
     console.log('[restore] skipped: shouldAttemptRestoration=false for:', JSON.stringify(sourceText));

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, BookOpen, Settings, RefreshCcw } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 import type { LearningArtifact, StoryArtifact, ProviderSettings } from './types';
 
 const API_BASE = 'http://localhost:43010';
@@ -23,8 +23,8 @@ export default function App() {
       setArtifacts((await artRes.json()).items || []);
       setStories((await storyRes.json()).items || []);
       setSettings(await setRes.json());
-    } catch (err) {
-      console.error('Failed to fetch:', err);
+    } catch (error) {
+      console.error('Failed to fetch:', error);
     } finally {
       setLoading(false);
       setIsFirstLoad(false);
@@ -171,7 +171,10 @@ function SettingsView({ settings, onUpdate }: {
         body: JSON.stringify(form)
       });
       if (res.ok) { onUpdate(form); alert('Saved.'); }
-    } catch (err) { alert('Failed.'); }
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      alert('Failed.');
+    }
   };
 
   return (

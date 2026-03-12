@@ -302,7 +302,7 @@ private struct DashboardTab: View {
 
                     Divider()
 
-                    Text("Suggestion")
+                    Text(isLikelyEnglish(artifact.sourceText) ? "Polished" : "Suggestion")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                     Text(artifact.suggestion)
@@ -506,6 +506,11 @@ private struct LearnTab: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                }
+                if record.sourceLanguage == "english" {
+                    Text("Polished")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
                 Text(record.englishText)
                     .font(.caption)
@@ -721,6 +726,12 @@ private extension String {
         fmt.dateFormat = "HH:mm"
         return fmt.string(from: date)
     }
+}
+
+private func isLikelyEnglish(_ text: String) -> Bool {
+    let hasChinese = text.range(of: "[\\u{4E00}-\\u{9FFF}]", options: .regularExpression) != nil
+    let hasLetters = text.range(of: "[A-Za-z]", options: .regularExpression) != nil
+    return hasLetters && !hasChinese
 }
 
 #Preview {
