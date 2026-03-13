@@ -10,7 +10,6 @@ import {
   ChevronRight,
   MessageCircle,
   Zap,
-  MoreHorizontal
 } from 'lucide-react';
 import type { 
   LearningArtifact, 
@@ -110,16 +109,15 @@ function TopBar({ view, currentFilter, onFilterChange }: { view: ViewType, curre
   const titles = { inbox: 'Inbox', library: 'Library', story: 'Story', settings: 'Settings' };
   return (
     <div className="top-bar">
-      <div className="view-title">{titles[view]}</div>
-      <div className="toolbar">
+      <div className="top-bar-left">
+        <div className="view-title">{titles[view]}</div>
         {view === 'inbox' && (
-          <>
+          <div className="toolbar">
             <button className={`filter-pill ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
             <button className={`filter-pill ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
             <button className={`filter-pill ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
-          </>
+          </div>
         )}
-        <button className="filter-pill"><MoreHorizontal size={14}/></button>
       </div>
     </div>
   );
@@ -147,33 +145,19 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
     artifact.explanation.toLowerCase().includes(msg.toLowerCase())
   );
 
+  const source = isExpression ? artifact.intentText : artifact.sourceText;
+
   return (
     <article className={`artifact-card ${variantClass}`}>
-      <div className="card-header">
-        {isExpression ? <MessageCircle size={12}/> : <Zap size={12}/>}
-        <span>{isExpression ? 'Expression' : 'Refinement'}</span>
-      </div>
       <div className="card-body">
-        {isExpression ? (
-          <>
-            <div className="label-small">Intent</div>
-            <div className="main-text">{artifact.intentText}</div>
-            <div className="label-small">Native</div>
-            <div className="main-text highlight-text">{artifact.suggestion}</div>
-          </>
-        ) : (
-          <>
-            <div className="label-small">Draft</div>
-            <div className="secondary-text" style={{ marginBottom: '8px' }}>{artifact.sourceText}</div>
-            <div className="label-small">Refined</div>
-            <div className="main-text highlight-text">{artifact.suggestion}</div>
-          </>
-        )}
+        <p className="card-source">{source}</p>
+        <p className="card-result">{artifact.suggestion}</p>
         {shouldShowExplanation && (
-          <div className="explanation-area">{artifact.explanation}</div>
+          <p className="card-note">{artifact.explanation}</p>
         )}
       </div>
-      <div className="card-footer">
+      <div className="card-meta">
+        <span className="card-type-tag">{isExpression ? 'Expr' : 'Refine'}</span>
         <span>{new Date(artifact.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
     </article>
