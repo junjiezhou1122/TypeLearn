@@ -71,14 +71,14 @@ export default function App() {
       <aside className="sidebar">
         <h2>TypeLearn</h2>
         <nav className="nav-group">
-          <NavItem active={view === 'inbox'} icon={<Inbox size={18}/>} label="Inbox" onClick={() => setView('inbox')} />
-          <NavItem active={view === 'library'} icon={<Library size={18}/>} label="Library" onClick={() => setView('library')} />
-          <NavItem active={view === 'story'} icon={<Book size={18}/>} label="Story" onClick={() => setView('story')} />
-          <NavItem active={view === 'settings'} icon={<Settings size={18}/>} label="Settings" onClick={() => setView('settings')} />
+          <NavItem active={view === 'inbox'} icon={<Inbox size={15}/>} label="Inbox" onClick={() => setView('inbox')} />
+          <NavItem active={view === 'library'} icon={<Library size={15}/>} label="Library" onClick={() => setView('library')} />
+          <NavItem active={view === 'story'} icon={<Book size={15}/>} label="Story" onClick={() => setView('story')} />
+          <NavItem active={view === 'settings'} icon={<Settings size={15}/>} label="Settings" onClick={() => setView('settings')} />
         </nav>
-        <div style={{ marginTop: 'auto', padding: '1rem' }}>
-          <button onClick={fetchData} className="nav-item" style={{ width: '100%', fontSize: '0.8rem', opacity: 0.6 }}>
-            <RefreshCcw size={14} className={loading ? 'spinning' : ''} />
+        <div style={{ marginTop: 'auto' }}>
+          <button onClick={fetchData} className="nav-item" style={{ fontSize: '12px', color: '#999' }}>
+            <RefreshCcw size={13} className={loading ? 'spinning' : ''} />
             <span>Sync</span>
           </button>
         </div>
@@ -131,9 +131,8 @@ function InboxView({ artifacts }: { artifacts: LearningArtifact[] }) {
       {artifacts.length > 0 ? (
         artifacts.map(a => <ArtifactCard key={a.id} artifact={a} />)
       ) : (
-        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '4rem', color: '#ccc' }}>
-          <Archive size={48} style={{ marginBottom: '1rem', opacity: 0.2 }} />
-          <p>No items found.</p>
+        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '3rem', color: '#999' }}>
+          <p>No items yet.</p>
         </div>
       )}
     </div>
@@ -144,29 +143,30 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
   const isExpression = artifact.type === 'Expression';
   const variantClass = isExpression ? 'variant-expression' : 'variant-refinement';
   const genericMessages = ['normalized capitalization', 'already looks clear', 'kept it as-is', 'natural in everyday writing'];
-  const shouldShowExplanation = artifact.explanation && !genericMessages.some(msg => 
+  const shouldShowExplanation = artifact.explanation && !genericMessages.some(msg =>
     artifact.explanation.toLowerCase().includes(msg.toLowerCase())
   );
 
   return (
     <article className={`artifact-card ${variantClass}`}>
       <div className="card-header">
-        {isExpression ? <MessageCircle size={14} strokeWidth={2.5}/> : <Zap size={14} strokeWidth={2.5}/>}
+        {isExpression ? <MessageCircle size={12}/> : <Zap size={12}/>}
+        <span>{isExpression ? 'Expression' : 'Refinement'}</span>
       </div>
       <div className="card-body">
         {isExpression ? (
           <>
             <div className="label-small">Intent</div>
-            <div className="main-text serif">{artifact.intentText}</div>
+            <div className="main-text">{artifact.intentText}</div>
             <div className="label-small">Native</div>
-            <div className="main-text serif highlight-text">{artifact.suggestion}</div>
+            <div className="main-text highlight-text">{artifact.suggestion}</div>
           </>
         ) : (
           <>
             <div className="label-small">Draft</div>
-            <div className="secondary-text serif" style={{ marginBottom: '1rem' }}>{artifact.sourceText}</div>
+            <div className="secondary-text" style={{ marginBottom: '8px' }}>{artifact.sourceText}</div>
             <div className="label-small">Refined</div>
-            <div className="main-text serif highlight-text">{artifact.suggestion}</div>
+            <div className="main-text highlight-text">{artifact.suggestion}</div>
           </>
         )}
         {shouldShowExplanation && (
@@ -175,9 +175,6 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
       </div>
       <div className="card-footer">
         <span>{new Date(artifact.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        <div style={{ display: 'flex', gap: '4px' }}>
-          {artifact.keyPhrases?.slice(0, 2).map(p => <span key={p} className="key-phrase-pill">{p}</span>)}
-        </div>
       </div>
     </article>
   );
@@ -186,20 +183,20 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
 function StoryView({ stories }: { stories: StoryArtifact[] }) {
   const [idx, setIdx] = useState(0);
   const story = stories[idx];
-  if (!story) return <div className="story-page" style={{ textAlign: 'center', padding: '10rem' }}>No stories yet.</div>;
+  if (!story) return <div className="story-page" style={{ textAlign: 'center', padding: '4rem', color: '#999' }}>No stories yet.</div>;
 
   return (
     <div className="story-page">
       <div className="story-navigation">
-        <button className="button-primary nav-button" onClick={() => setIdx(idx + 1)} disabled={idx === stories.length - 1}><ChevronLeft size={16}/> Previous</button>
-        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#aaa' }}>{stories.length - idx} / {stories.length}</span>
-        <button className="button-primary nav-button" onClick={() => setIdx(idx - 1)} disabled={idx === 0}>Next <ChevronRight size={16}/></button>
+        <button className="button-primary nav-button" onClick={() => setIdx(idx + 1)} disabled={idx === stories.length - 1}><ChevronLeft size={14}/> Prev</button>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: '#999' }}>{stories.length - idx} / {stories.length}</span>
+        <button className="button-primary nav-button" onClick={() => setIdx(idx - 1)} disabled={idx === 0}>Next <ChevronRight size={14}/></button>
       </div>
       <article className="story-doc fade-in" key={story.id}>
-        <h1 className="serif">{story.title}</h1>
+        <h1>{story.title}</h1>
         <div className="date">{new Date(story.createdAt).toLocaleDateString()}</div>
-        <div className="content serif">
-          {story.story.split('\n').map((p, i) => <p key={i} style={{ marginBottom: '1.5rem' }}>{p}</p>)}
+        <div className="content">
+          {story.story.split('\n').map((p, i) => <p key={i} style={{ marginBottom: '1rem' }}>{p}</p>)}
         </div>
       </article>
     </div>
