@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Inbox,
-  Library, 
-  Book, 
-  Settings, 
+  Library,
+  Book,
+  Settings,
   RefreshCcw,
   Archive,
   ChevronLeft,
@@ -11,7 +11,7 @@ import {
   MessageCircle,
   Zap,
 } from 'lucide-react';
-import type { 
+import type {
   LearningArtifact, 
   StoryArtifact, 
   ProviderSettings,
