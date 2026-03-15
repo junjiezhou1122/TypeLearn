@@ -60,6 +60,27 @@ const server = createServer((request, response) => {
     return;
   }
 
+  if (request.method === 'GET' && request.url === '/choices') {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ items: store.listChoices() }));
+    return;
+  }
+
+  if (request.method === 'GET' && request.url.startsWith('/patterns')) {
+    const params = new URL(request.url, `http://${host}:${port}`).searchParams;
+    const day = params.get('day') ?? new Date().toISOString().slice(0, 10);
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ items: store.getPatterns(day) }));
+    return;
+  }
+
+  if (request.method === 'GET' && request.url === '/daily') {
+    const day = new Date().toISOString().slice(0, 10);
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ item: store.getDailyLesson(day) }));
+    return;
+  }
+
   if (request.method === 'POST' && request.url === '/artifacts') {
     const chunks: Buffer[] = [];
     request.on('data', (chunk) => chunks.push(chunk));
@@ -79,6 +100,7 @@ const server = createServer((request, response) => {
             return;
           }
 
+          // NOTE: provider settings are stored globally; settings override is ignored for now.
           const record = await store.addRecord(sourceText, body.sourceApp ?? null, body.settings);
           const artifact = store.listArtifacts()[0];
           response.writeHead(201, { 'content-type': 'application/json' });
@@ -91,6 +113,51 @@ const server = createServer((request, response) => {
         }
       })();
     });
+    return;
+  }
+
+  if (request.method === 'POST' && request.url.startsWith('/choices/') && request.url.endsWith('/select')) {
+    const parts = request.url.split('/');
+    const id = parts[2];
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('end', () => {
+      void (async () => {
+        try {
+          const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { index?: number };
+          const index = body.index;
+          if (typeof index !== 'number' || !Number.isFinite(index)) {
+            response.writeHead(400, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: 'index is required' }));
+            return;
+          }
+
+          const record = await store.selectChoice(id, index);
+          if (!record) {
+            response.writeHead(404, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: 'choice not found' }));
+            return;
+          }
+
+          response.writeHead(201, { 'content-type': 'application/json' });
+          response.end(JSON.stringify({ record }));
+        } catch {
+          if (!response.headersSent) {
+            response.writeHead(500, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: 'internal server error' }));
+          }
+        }
+      })();
+    });
+    return;
+  }
+
+  if (request.method === 'DELETE' && request.url.startsWith('/choices/')) {
+    const id = request.url.replace('/choices/', '');
+    void (async () => {
+      const deleted = await store.deleteChoice(id);
+      response.writeHead(deleted ? 204 : 404).end();
+    })();
     return;
   }
 

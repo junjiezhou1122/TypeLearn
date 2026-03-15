@@ -15,6 +15,7 @@ test('builds a fallback story from today\'s translated records', async () => {
       status: 'done',
       retryCount: 0,
       lastError: null,
+      pipelineStage: 'committed',
     },
   ], {
     baseUrl: '',
@@ -24,4 +25,5 @@ test('builds a fallback story from today\'s translated records', async () => {
 
   assert.equal(story.title, "Today's Story");
   assert.match(story.story, /Today I feel very happy/);
+  assert.match(story.story, /Steal these lines/);
 });

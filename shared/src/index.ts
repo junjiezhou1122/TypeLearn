@@ -6,29 +6,60 @@ export interface HealthStatus {
   providerModes: ProviderMode[];
 }
 
+export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'filtered';
+
 export interface LearningArtifact {
   id: string;
   sourceText: string;
   restoredText?: string | null;
+
+  // Backward-compatible string fields (existing UIs).
   suggestion: string;
   explanation: string;
+
+  // Optional richer fields (web UI can use; Swift ignores unknown keys).
+  corrected?: string;
+  alt1Natural?: string;
+  alt2ClearFormal?: string;
+
+  intentZh?: string;
+  enMain?: string;
+  enAlternatives?: string[];
+  enTemplates?: string[];
+
+  patternKeys?: string[];
+
   createdAt: string;
   status?: CaptureStatus;
 }
-
-export type CaptureStatus = 'pending' | 'processing' | 'done' | 'failed' | 'filtered';
 
 export interface CaptureRecord {
   id: string;
   sourceText: string;
   restoredText: string | null;
+
+  // Main English line for legacy story + UI.
   englishText: string;
+
   sourceLanguage: 'chinese' | 'english' | 'mixed' | 'unknown';
   sourceApp: string | null;
   createdAt: string;
   status: CaptureStatus;
   retryCount: number;
   lastError: string | null;
+
+  // Pipeline bookkeeping (new pipeline only).
+  pipelineStage?: 'draft' | 'committed';
+
+  // Optional learning metadata.
+  corrected?: string;
+  alt1Natural?: string;
+  alt2ClearFormal?: string;
+  intentZh?: string;
+  enAlternatives?: string[];
+  enTemplates?: string[];
+  eventIds?: string[];
+  patternKeys?: string[];
 }
 
 export interface StoryArtifact {
@@ -43,4 +74,84 @@ export interface ProviderSettings {
   baseUrl: string;
   apiKey: string;
   model: string;
+}
+
+export type UtteranceLanguageHint = 'pinyin' | 'zh' | 'en' | 'mixed' | 'unknown';
+
+export interface ChoiceCandidate {
+  // What the user likely meant (abstract).
+  intentZh: string;
+
+  // Reusable English (simple).
+  enMain: string;
+  enAlternatives?: string[];
+  enTemplates?: string[];
+}
+
+export interface ChoiceItem {
+  id: string;
+  sourceApp: string | null;
+  createdAt: string;
+  mergedRaw: string;
+  languageHint: UtteranceLanguageHint;
+  fragmentIds: string[];
+  candidates: ChoiceCandidate[];
+  expiresAt: string;
+}
+
+export type LearningEventType = 'GrammarFix' | 'ExpressionUpgrade' | 'CN2EN';
+
+export type MacroCategory =
+  | 'Tense'
+  | 'Articles'
+  | 'Prepositions'
+  | 'WordChoice'
+  | 'Collocation'
+  | 'SentenceStructure'
+  | 'Tone'
+  | 'CN2EN';
+
+export interface Teaching {
+  rule: string;
+  hook: string;
+  badExample: string;
+  goodExample: string;
+  template: string;
+}
+
+export interface LearningEvent {
+  id: string;
+  createdAt: string;
+  utteranceId: string;
+  type: LearningEventType;
+  before: string;
+  after: string;
+  teaching: Teaching;
+  patternKey: string;
+  macroCategory: MacroCategory;
+}
+
+export interface Pattern {
+  patternKey: string;
+  macroCategory: MacroCategory;
+  title: string;
+  lesson: Teaching;
+  counts: {
+    today: number;
+    last7d: number;
+    total: number;
+  };
+  exampleEventIds: string[];
+}
+
+export interface DailyLessonGroup {
+  macroCategory: MacroCategory;
+  patterns: Pattern[];
+}
+
+export interface DailyLesson {
+  day: string; // YYYY-MM-DD
+  createdAt: string;
+  groups: DailyLessonGroup[];
+  stealLines: string[];
 }

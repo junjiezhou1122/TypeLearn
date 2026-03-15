@@ -2,11 +2,24 @@ import type { CaptureRecord, ProviderSettings, StoryArtifact } from '../../share
 
 export async function generateDailyStory(records: CaptureRecord[], settings: ProviderSettings): Promise<StoryArtifact> {
   const todayRecords = records.filter((record) => isToday(record.createdAt) && record.status === 'done');
-  const englishLines = todayRecords.map((record) => `- ${record.englishText}`).join('\n');
 
-  const fallbackStory = buildFallbackStory(todayRecords);
+  const intents = todayRecords
+    .map((r) => r.intentZh)
+    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
 
-  if (!settings.baseUrl || !settings.model || !englishLines) {
+  const stealLines = todayRecords
+    .flatMap((r) => r.enTemplates ?? [])
+    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+    .slice(0, 16);
+
+  const fallbackStory = buildFallbackStory(todayRecords, stealLines);
+
+  if (!settings.baseUrl || !settings.model) {
+    return createStoryArtifact(todayRecords, fallbackStory);
+  }
+
+  // If we have no safe material, prefer fallback.
+  if (intents.length === 0 && stealLines.length === 0) {
     return createStoryArtifact(todayRecords, fallbackStory);
   }
 
@@ -23,11 +36,25 @@ export async function generateDailyStory(records: CaptureRecord[], settings: Pro
         messages: [
           {
             role: 'system',
-            content: 'You are an English coach. Write a short, coherent English story inspired by the user\'s lines from today. You may omit or combine lines for clarity. Return only the story text.',
+            content: [
+              'Write an abstract, story-safe daily story in simple English.',
+              'Inputs are intents/themes (Chinese summaries) and reusable English templates.',
+              '',
+              'Rules:',
+              '- Do NOT include private details (names, places, companies, emails, numbers, IDs).',
+              '- Keep it coherent, warm, and general. No real-world specifics.',
+              '- Include a final section titled "Steal these lines" with 5–10 bullet points.',
+              '- Each bullet point must be a reusable English line (can reuse templates).',
+              '',
+              'Return only the story text (multi-paragraph is ok).',
+            ].join('\n'),
           },
           {
             role: 'user',
-            content: `Today\'s English lines:\n${englishLines}`,
+            content: JSON.stringify({
+              intents,
+              templates: stealLines,
+            }),
           },
         ],
       }),
@@ -37,7 +64,7 @@ export async function generateDailyStory(records: CaptureRecord[], settings: Pro
       throw new Error(`story generation failed with status ${response.status}`);
     }
 
-    const payload = await response.json() as {
+    const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
 
@@ -63,21 +90,31 @@ function resolveChatCompletionsUrl(baseUrl: string): URL {
 function createStoryArtifact(records: CaptureRecord[], story: string): StoryArtifact {
   return {
     id: crypto.randomUUID(),
-    title: 'Today\'s Story',
+    title: "Today's Story",
     story,
     createdAt: new Date().toISOString(),
     sourceRecordIds: records.map((record) => record.id),
   };
 }
 
-function buildFallbackStory(records: CaptureRecord[]): string {
+function buildFallbackStory(records: CaptureRecord[], templates: string[]): string {
   if (records.length === 0) {
-    return 'No captured content for today yet. Start typing in Chinese or English to build today\'s story.';
+    return 'No captured content for today yet. Start typing to build today\'s story.';
   }
 
-  const opening = 'Today, a learner moved through the day collecting fragments of thought.';
-  const body = records.slice(0, 5).map((record) => record.englishText).join(' ');
-  return `${opening} ${body}`.trim();
+  const opening = 'Today, a learner moved through the day with a few clear intentions.';
+  const body = records
+    .slice(0, 5)
+    .map((record) => record.englishText)
+    .filter(Boolean)
+    .join(' ');
+
+  const steal = templates.slice(0, 8);
+  const stealSection = steal.length
+    ? `\n\nSteal these lines\n${steal.map((t) => `- ${t}`).join('\n')}`
+    : '';
+
+  return `${opening} ${body}`.trim() + stealSection;
 }
 
 function isToday(timestamp: string): boolean {

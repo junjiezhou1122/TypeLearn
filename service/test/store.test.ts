@@ -16,13 +16,16 @@ test('adds artifacts to the front of the review history', () => {
 
 test('exposes capture records in newest-first order for persisted history', async () => {
   const store = new LearningStore();
+  await store.init();
   await store.updateSettings({ baseUrl: '', apiKey: '', model: 'gpt-4.1-mini' });
+
   const first = await store.addRecord('今天很开心', 'Notes');
-  await new Promise(resolve => setTimeout(resolve, 2100));
+  await new Promise(resolve => setTimeout(resolve, 50));
   const second = await store.addRecord('I have a meeting later', 'Xcode');
 
   const records = store.listRecords();
 
+  // Draft records are inserted newest-first.
   assert.equal(records[0]?.id, second.id);
   assert.equal(records[1]?.id, first.id);
 });

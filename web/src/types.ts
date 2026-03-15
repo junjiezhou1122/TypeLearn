@@ -5,30 +5,87 @@ export interface LearningArtifact {
   id: string;
   type: ArtifactType;
   category?: ArtifactCategory;
-  
-  // English Refinement specific
+
   sourceText: string;
   suggestion: string;
   explanation: string;
-  
-  // Chinese Expression specific
-  intentText?: string; // What you wanted to say (Chinese)
-  alternatives?: string[];
-  usageContext?: string;
-  keyPhrases?: string[];
-  
+
+  // Rich optional fields from the new pipeline.
+  corrected?: string;
+  alt1Natural?: string;
+  alt2ClearFormal?: string;
+
+  intentZh?: string;
+  enMain?: string;
+  enAlternatives?: string[];
+  enTemplates?: string[];
+
+  patternKeys?: string[];
+
   createdAt: string;
   status: 'pending' | 'processing' | 'done' | 'failed' | 'filtered';
   isSaved?: boolean;
 }
 
-export interface PatternArtifact {
+export interface ChoiceCandidate {
+  intentZh: string;
+  enMain: string;
+  enAlternatives?: string[];
+  enTemplates?: string[];
+}
+
+export interface ChoiceItem {
   id: string;
-  title: string;
-  description: string;
-  examples: string[];
-  frequency: number;
+  sourceApp: string | null;
   createdAt: string;
+  mergedRaw: string;
+  languageHint: 'pinyin' | 'zh' | 'en' | 'mixed' | 'unknown';
+  fragmentIds: string[];
+  candidates: ChoiceCandidate[];
+  expiresAt: string;
+}
+
+export type MacroCategory =
+  | 'Tense'
+  | 'Articles'
+  | 'Prepositions'
+  | 'WordChoice'
+  | 'Collocation'
+  | 'SentenceStructure'
+  | 'Tone'
+  | 'CN2EN';
+
+export interface Teaching {
+  rule: string;
+  hook: string;
+  badExample: string;
+  goodExample: string;
+  template: string;
+}
+
+export interface Pattern {
+  patternKey: string;
+  macroCategory: MacroCategory;
+  title: string;
+  lesson: Teaching;
+  counts: {
+    today: number;
+    last7d: number;
+    total: number;
+  };
+  exampleEventIds: string[];
+}
+
+export interface DailyLessonGroup {
+  macroCategory: MacroCategory;
+  patterns: Pattern[];
+}
+
+export interface DailyLesson {
+  day: string;
+  createdAt: string;
+  groups: DailyLessonGroup[];
+  stealLines: string[];
 }
 
 export interface StoryArtifact {
