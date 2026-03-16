@@ -3,9 +3,9 @@
 # TypeLearn
 ![alt text](image.png)
 
-### Learn English from every keystroke.
+### Learn English from every keystroke — in a calm, glassy inbox.
 
-A privacy-first macOS menu bar app that transforms your daily typing into continuous, ambient language learning.
+TypeLearn is a privacy-first macOS companion with a local service and a web UI. It turns daily typing into a quiet timeline of learning artifacts you can swipe through by day.
 
 [![macOS](https://img.shields.io/badge/macOS-12%2B-000000?style=flat&logo=apple&logoColor=white)](#)
 [![Swift](https://img.shields.io/badge/Swift-6-F05138?style=flat&logo=swift&logoColor=white)](#)
@@ -15,7 +15,7 @@ A privacy-first macOS menu bar app that transforms your daily typing into contin
 
 <br/>
 
-**TypeLearn quietly observes what you type, identifies learning moments, and helps improve your vocabulary, phrasing, and expression — without ever interrupting your flow.**
+**TypeLearn quietly observes what you type, identifies learning moments, and surfaces them in a swipeable day ribbon — without interrupting your flow.**
 
 <br/>
 
@@ -25,25 +25,56 @@ A privacy-first macOS menu bar app that transforms your daily typing into contin
 
 <br/>
 
-## Why TypeLearn?
+## The idea
 
-Most language-learning tools demand dedicated study time. TypeLearn takes a different approach: it meets you where you already are — at the keyboard.
+Most language-learning tools ask for separate study time. TypeLearn meets you at the keyboard and turns real work into continuous practice.
 
 > **Type naturally. Learn continuously. Stay in flow.**
 
 <br/>
 
-## Features
+## What TypeLearn ships today
 
-| | Feature | Description |
-|---|---------|-------------|
-| **⌨️** | **Ambient Learning** | Learns from your real typing — no flashcards, no separate study sessions |
-| **📍** | **Menu Bar Native** | Lives in your macOS menu bar, always one click away |
-| **🔒** | **Privacy-First** | All data stays local by default — nothing leaves your device without explicit consent |
-| **🌐** | **Multilingual Capture** | Detects Chinese input and translates to English for cross-language learning |
-| **✏️** | **Grammar Coaching** | Spots common mistakes and suggests improvements with clear explanations |
-| **📖** | **Daily Stories** | Generates a personalized narrative from your day's writing to reinforce learning |
-| **🔑** | **Bring Your Own Key** | Connect any OpenAI-compatible API for enhanced AI-powered features |
+| Feature | Description |
+|---|---|
+| Day ribbon inbox | Horizontal day ribbon keeps focus tight while letting you swipe through time |
+| Learning artifacts | Corrections, rewrites, and explanations built from your real text |
+| Choices flow | Disambiguation for ambiguous pinyin or mixed inputs |
+| Daily lesson | Pattern grouping and a daily summary view |
+| Daily story | A narrative generated from your day’s writing |
+| Local-first service | Node.js service with local persistence and retry queue |
+| BYOK provider | Optional OpenAI-compatible provider settings |
+
+<br/>
+
+## Experience overview
+
+1. Text is submitted to the local service (`POST /artifacts`).
+2. The service assembles fragments, restores pinyin if needed, and generates learning artifacts.
+3. The web UI renders a glassy inbox with a swipeable day ribbon and filters (All / English / Chinese).
+4. Choices and daily lessons are surfaced as needed.
+
+<br/>
+
+## Repository layout
+
+```
+TypeLearn/
+├─ macos/                  # SwiftUI shell (menu bar view stub)
+│  └─ ContentView.swift
+├─ service/                # Local orchestration service (Node.js + TS)
+│  └─ src/
+│     ├─ index.ts
+│     ├─ store.ts
+│     ├─ coaching.ts
+│     ├─ translator.ts
+│     ├─ story.ts
+│     └─ persistence.ts
+├─ web/                    # React + Vite UI (inbox, choices, stories)
+├─ shared/                 # Shared TypeScript types
+├─ scripts/                # Dev helpers
+└─ PRODUCT.md              # Product vision
+```
 
 <br/>
 
@@ -55,26 +86,36 @@ Most language-learning tools demand dedicated study time. TypeLearn takes a diff
 |-------------|---------|
 | macOS | 12+ |
 | Node.js | 18+ |
-| Xcode | Latest |
 
-The app will prompt for **Accessibility** and **Input Monitoring** permissions on first launch.
-
-### Quick Start
+### Quick start (local service + web UI)
 
 ```bash
-# Clone & install
-git clone https://github.com/your-username/TypeLearn.git
-cd TypeLearn && npm install
+# Install
+npm install
 
-# Build all workspaces
-npm run build
-
-# Start the orchestration service
-npm run dev:service
-# → http://127.0.0.1:43010
+# Run service + web
+npm run dev
 ```
 
-Then open `macos/TypeLearn.xcodeproj` in Xcode and hit **Run** to launch the menu bar app.
+- The service listens on `http://127.0.0.1:43010` by default.
+- The web UI runs via Vite (see the terminal output for the URL).
+
+### Workspace-specific commands
+
+```bash
+npm run dev:service     # Start service only
+npm run dev:web         # Start web UI only
+npm run build           # Build all workspaces
+npm run typecheck       # Type-check everything
+```
+
+<br/>
+
+## macOS app status
+
+The macOS menu bar app is currently a SwiftUI shell located at `macos/ContentView.swift`. The Xcode project scaffolding is not committed yet. The `npm run dev:app` script currently prints a placeholder message.
+
+When capture is enabled in the native app, macOS will require Accessibility and Input Monitoring permissions.
 
 <br/>
 
@@ -85,102 +126,46 @@ Then open `macos/TypeLearn.xcodeproj` in Xcode and hit **Run** to launch the men
     ┌────────────────────────┼────────────────────────┐
     │                        │                        │
     ▼                        ▼                        ▼
- ┌──────┐              ┌─────────┐              ┌────────┐
- │macOS │  ◄─ HTTP ──► │ Service │  ◄─ types ─► │ Shared │
- └──────┘              └─────────┘              └────────┘
-  SwiftUI               Node.js                TypeScript
-  Menu Bar              :43010                  Interfaces
+┌────────┐              ┌─────────┐              ┌────────┐
+│ macOS  │   (planned)  │ Service │  ◄─ types ─► │ Shared │
+└────────┘              └─────────┘              └────────┘
+   SwiftUI               Node.js                TypeScript
+                         :43010
+                              ▲
+                              │
+                           ┌──────┐
+                           │ Web  │
+                           └──────┘
+                        React + Vite
 ```
 
-<details>
-<summary><b>How it works</b></summary>
-
-<br/>
+### Data flow (current)
 
 ```
- You type → CaptureMonitor detects input → Buffer flushes on pause
-                                                    │
-                                                    ▼
-                                          POST /artifacts
-                                                    │
-                                                    ▼
-                                     ┌──────────────────────────┐
-                                     │   Orchestration Service   │
-                                     │                          │
-                                     │  1. Detect language      │
-                                     │  2. Translate if needed  │
-                                     │  3. Apply coaching rules │
-                                     │  4. Generate artifact    │
-                                     │  5. Persist to disk      │
-                                     └──────────────────────────┘
-                                                    │
-                                                    ▼
-                                          Learning artifact
-                                         surfaces in your UI
-```
-
-</details>
-
-### Monorepo Structure
-
-```
-TypeLearn/
-│
-├─ macos/                        # SwiftUI macOS App
-│  └─ TypeLearn/
-│     ├─ TypeLearnApp.swift         App entry point (MenuBarExtra)
-│     ├─ ContentView.swift          Tabbed UI — Dashboard / Learn / Settings
-│     ├─ AppModel.swift             Root observable view model
-│     ├─ CaptureMonitor.swift       Global keyboard event tap
-│     ├─ AXTextCapture.swift        Accessibility API for IME text
-│     └─ ServiceClient.swift        HTTP client to local service
-│
-├─ service/                      # Node.js Orchestration Service
-│  └─ src/
-│     ├─ index.ts                   HTTP server & routing
-│     ├─ store.ts                   Core data management (LearningStore)
-│     ├─ coaching.ts                Grammar rules & suggestion engine
-│     ├─ story.ts                   Daily story generation
-│     ├─ translator.ts              Language detection & translation
-│     ├─ persistence.ts             State persistence (~/.typelearn/)
-│     └─ provider.ts                Provider abstraction layer
-│
-├─ shared/                       # Shared Type Definitions
-│  └─ src/
-│     └─ index.ts                   LearningArtifact, CaptureRecord, etc.
-│
-├─ package.json                  # npm workspace root
-├─ tsconfig.base.json            # Shared TypeScript config
-└─ PRODUCT.md                    # Product vision & strategy
+You type → POST /artifacts → fragment assembly → learning artifact
+                                         │
+                                         ├─ Choices (pinyin disambiguation)
+                                         ├─ Daily lesson (patterns)
+                                         └─ Story generation
 ```
 
 <br/>
 
-## Development
+## Persistence & configuration
 
-```bash
-npm run build           # Build all workspaces
-npm run dev:service     # Start service in dev mode
-npm run typecheck       # Type-check everything
-npm run test            # Run test suite
+- Local state file: `~/.typelearn/state.json`
+- Override with `TYPELEARN_STATE_FILE`
+- Service host/port: `HOST` and `PORT` environment variables
+
+Provider settings are stored locally and can be updated via `PUT /settings`:
+
+```json
+{
+  "baseUrl": "http://localhost:11434",
+  "apiKey": "sk-...",
+  "model": "gpt-4.1-mini"
+}
 ```
-
-<details>
-<summary><b>Workspace-specific commands</b></summary>
-
-<br/>
-
-```bash
-# Service
-npm run build  --workspace service
-npm run dev    --workspace service
-npm run test   --workspace service
-
-# Shared types
-npm run build  --workspace shared
-```
-
-</details>
 
 <br/>
 
@@ -188,24 +173,23 @@ npm run build  --workspace shared
 
 The orchestration service runs at `http://127.0.0.1:43010`.
 
-<details open>
-<summary><b>Endpoints</b></summary>
-
-<br/>
-
 | Method | Endpoint | Description |
 |:------:|----------|-------------|
 | `GET` | `/health` | Health check & provider status |
 | `GET` | `/artifacts` | List learning artifacts |
-| `GET` | `/records` | List captured text records |
-| `GET` | `/stories` | List generated daily stories |
-| `GET` | `/settings` | Retrieve provider settings |
 | `POST` | `/artifacts` | Submit text for artifact generation |
-| `POST` | `/stories/generate` | Generate daily story from captures |
-| `PUT` | `/settings` | Update provider settings |
+| `POST` | `/artifacts/:id/retry` | Retry a failed artifact |
+| `GET` | `/records` | List captured text records |
 | `DELETE` | `/records/:id` | Delete a capture record |
-
-</details>
+| `GET` | `/choices` | List choice items |
+| `POST` | `/choices/:id/select` | Select a choice candidate |
+| `DELETE` | `/choices/:id` | Drop a choice item |
+| `GET` | `/patterns?day=YYYY-MM-DD` | Pattern counts for a day |
+| `GET` | `/daily` | Daily lesson summary |
+| `GET` | `/stories` | List generated stories |
+| `POST` | `/stories/generate` | Generate a daily story |
+| `GET` | `/settings` | Retrieve provider settings |
+| `PUT` | `/settings` | Update provider settings |
 
 <br/>
 
@@ -215,31 +199,25 @@ TypeLearn is built on a strict privacy model — your keystrokes are yours.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Your Mac (local)                      │
+│                    Your Mac (local)                     │
 │                                                         │
 │   Typing ──► Capture ──► Process ──► ~/.typelearn/      │
 │                                                         │
-│   ❌ No telemetry    ❌ No cloud sync    ❌ No tracking  │
+│   No telemetry     No cloud sync     No tracking         │
 └─────────────────────────────────────────────────────────┘
-                          │
-                 Only if YOU configure it
-                          │
-                          ▼
-                 ┌─────────────────┐
-                 │  Your API Key   │
-                 │  Your Provider  │
-                 └─────────────────┘
+                         │
+                Only if YOU configure it
+                         │
+                         ▼
+                ┌─────────────────┐
+                │  Your API Key   │
+                │  Your Provider  │
+                └─────────────────┘
 ```
 
-| Mode | Description | Remote Calls |
-|------|-------------|:------------:|
-| **Local** *(default)* | All processing on-device | None |
-| **BYOK Remote** | Bring your own API key | Your provider only |
-| **Custom Endpoint** | Point to any OpenAI-compatible API | Your endpoint only |
-
-- All data persists locally at `~/.typelearn/state.json`
-- AI features (translation, story generation) are **opt-in** and require explicit provider configuration
-- No data is ever shared with TypeLearn developers
+- All data persists locally by default.
+- AI features are opt-in and require explicit provider configuration.
+- No data is sent to TypeLearn developers.
 
 <br/>
 
@@ -247,27 +225,12 @@ TypeLearn is built on a strict privacy model — your keystrokes are yours.
 
 | Layer | Technology | Role |
 |-------|-----------|------|
-| **Frontend** | Swift 6, SwiftUI | Menu bar app, keyboard capture, UI |
-| **Backend** | TypeScript, Node.js | Orchestration, NLP, persistence |
-| **Build** | npm workspaces, tsc | Monorepo management |
-| **Persistence** | JSON (local file) | `~/.typelearn/state.json` |
-| **IPC** | HTTP (localhost) | App ↔ Service communication |
-
-<br/>
-
-## Roadmap
-
-- [x] macOS menu bar shell with permission management
-- [x] Privacy-conscious keyboard capture (CGEvent + Accessibility)
-- [x] Learning artifact generation with grammar coaching
-- [x] Local persistence and review UI
-- [x] Provider abstraction (local / BYOK / custom)
-- [x] Chinese → English translation pipeline
-- [x] Daily story generation
-- [ ] Enhanced noise filtering and capture quality
-- [ ] Richer coaching with contextual suggestions
-- [ ] Spaced repetition for learned artifacts
-- [ ] Export and backup functionality
+| Web UI | React 19, Vite | Inbox, choices, stories, settings |
+| Service | TypeScript, Node.js | Orchestration, NLP, persistence |
+| macOS | Swift 6, SwiftUI | Menu bar shell (stub) |
+| Shared | TypeScript | Shared domain types |
+| Persistence | JSON (local file) | `~/.typelearn/state.json` |
+| IPC | HTTP (localhost) | App ↔ Service communication |
 
 <br/>
 
