@@ -7,6 +7,7 @@ export interface LearningArtifact {
   category?: ArtifactCategory;
 
   sourceText: string;
+  restoredText?: string | null;
   suggestion: string;
   explanation: string;
 

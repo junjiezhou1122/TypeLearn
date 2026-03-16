@@ -183,43 +183,7 @@ export class LearningStore {
 
     // Remove choice first (prevents double-select).
     this.#state.choices.splice(choiceIndex, 1);
-
-    const nowIso = new Date().toISOString();
-
-    const restoration =
-      choice.languageHint === 'pinyin'
-        ? await restoreChineseFromRomanized(choice.mergedRaw, this.#state.settings)
-        : { restoredText: choice.mergedRaw, didRestore: false };
-
-    const restoredText = restoration.didRestore ? restoration.restoredText : null;
-    const sourceLanguage = restoredText
-      ? detectLanguage(restoredText)
-      : choice.languageHint === 'zh'
-        ? 'chinese'
-        : choice.languageHint === 'en'
-          ? 'english'
-          : detectLanguage(choice.mergedRaw);
-
-    // NOTE: selecting a CHOICE should preserve the original capture (pinyin/raw)
-    // while committing the chosen English immediately.
-    const record: CaptureRecord = {
-      id: crypto.randomUUID(),
-      sourceText: choice.mergedRaw,
-      restoredText,
-      englishText: candidate.enMain,
-      sourceLanguage,
-      sourceApp: choice.sourceApp,
-      createdAt: nowIso,
-      status: 'done',
-      retryCount: 0,
-      lastError: null,
-      pipelineStage: 'committed',
-      intentZh: candidate.intentZh,
-      enAlternatives: candidate.enAlternatives,
-      enTemplates: candidate.enTemplates,
-    };
-
-    this.#state.records.unshift(record);
+    const record = await this.commitChoiceCandidate(choice, candidate, new Date().toISOString());
     await saveState(this.#state);
 
     return record;
@@ -235,6 +199,46 @@ export class LearningStore {
 
   listRecords(): CaptureRecord[] {
     return this.#state.records.filter((record) => record.status !== 'filtered');
+  }
+
+  private async commitChoiceCandidate(
+    choice: Pick<ChoiceItem, 'sourceApp' | 'mergedRaw' | 'languageHint'>,
+    candidate: ChoiceCandidate,
+    createdAt: string
+  ): Promise<CaptureRecord> {
+    const restoration =
+      choice.languageHint === 'pinyin'
+        ? await restoreChineseFromRomanized(choice.mergedRaw, this.#state.settings)
+        : { restoredText: choice.mergedRaw, didRestore: false };
+
+    const restoredText = restoration.didRestore ? restoration.restoredText : null;
+    const sourceLanguage = restoredText
+      ? detectLanguage(restoredText)
+      : choice.languageHint === 'zh'
+        ? 'chinese'
+        : choice.languageHint === 'en'
+          ? 'english'
+          : detectLanguage(choice.mergedRaw);
+
+    const record: CaptureRecord = {
+      id: crypto.randomUUID(),
+      sourceText: choice.mergedRaw,
+      restoredText,
+      englishText: candidate.enMain,
+      sourceLanguage,
+      sourceApp: choice.sourceApp,
+      createdAt,
+      status: 'done',
+      retryCount: 0,
+      lastError: null,
+      pipelineStage: 'committed',
+      intentZh: candidate.intentZh,
+      enAlternatives: candidate.enAlternatives,
+      enTemplates: candidate.enTemplates,
+    };
+
+    this.#state.records.unshift(record);
+    return record;
   }
 
   // ---- Patterns / daily lesson ----
@@ -527,6 +531,28 @@ export class LearningStore {
 
           const filteredCandidates = await filterChoiceCandidates(mergedRaw, item.candidates, this.#state.settings);
           if (!filteredCandidates.length) {
+            item.fragmentIds.forEach((id) => consumedFragmentIds.add(id));
+            continue;
+          }
+
+          const autoCandidate = await pickAutoChoiceCandidateForSeamlessLearning(
+            mergedRaw,
+            filteredCandidates,
+            item.languageHint ?? 'pinyin',
+            this.#state.settings
+          );
+
+          if (autoCandidate) {
+            await this.commitChoiceCandidate(
+              {
+                sourceApp,
+                mergedRaw,
+                languageHint: item.languageHint ?? 'pinyin',
+              },
+              autoCandidate,
+              nowIso
+            );
+            didMutate = true;
             item.fragmentIds.forEach((id) => consumedFragmentIds.add(id));
             continue;
           }
@@ -1147,8 +1173,76 @@ async function filterChoiceCandidates(
   return dedupeCandidates(filtered);
 }
 
+export async function pickAutoChoiceCandidateForSeamlessLearning(
+  mergedRaw: string,
+  candidates: ChoiceCandidate[],
+  languageHint: UtteranceLanguageHint,
+  settings: ProviderSettings
+): Promise<ChoiceCandidate | null> {
+  if (!candidates.length) return null;
+  if (candidates.length === 1) return candidates[0];
+
+  const normalizedZh = new Set(candidates.map((candidate) => normalizeChinese(candidate.intentZh)));
+  if (normalizedZh.size === 1) return candidates[0];
+
+  const normalizedEn = new Set(candidates.map((candidate) => normalizeEnglishChoice(candidate.enMain)));
+  if (normalizedEn.size === 1) return candidates[0];
+
+  if (languageHint !== 'pinyin' && !isLikelyPinyin(mergedRaw)) {
+    return null;
+  }
+
+  const restoration = await restoreChineseFromRomanized(mergedRaw, settings);
+  if (!restoration.didRestore) return null;
+
+  const normalizedBase = normalizeChinese(restoration.restoredText);
+  if (!normalizedBase) return null;
+
+  const exactMatches = candidates.filter(
+    (candidate) => normalizeChinese(candidate.intentZh) === normalizedBase
+  );
+  if (exactMatches.length === 1) {
+    return exactMatches[0];
+  }
+
+  const scored = candidates
+    .map((candidate) => ({
+      candidate,
+      score: chineseCharacterOverlapScore(normalizedBase, normalizeChinese(candidate.intentZh)),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0];
+  const runnerUp = scored[1];
+  if (!best) return null;
+
+  if (best.score >= Math.min(3, normalizedBase.length) && (!runnerUp || best.score >= runnerUp.score + 2)) {
+    return best.candidate;
+  }
+
+  return null;
+}
+
 function normalizeChinese(text: string): string {
   return text.replace(/\s+/g, '').replace(/[，。！？,.!?]/g, '').trim();
+}
+
+function normalizeEnglishChoice(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(a|an|the|to)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function chineseCharacterOverlapScore(base: string, candidate: string): number {
+  if (!base || !candidate) return 0;
+  let score = 0;
+  for (const char of candidate) {
+    if (base.includes(char)) score += 1;
+  }
+  return score;
 }
 
 function hasChineseOverlap(a: string, b: string): boolean {

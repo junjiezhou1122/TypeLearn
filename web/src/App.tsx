@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import {
   Inbox,
-  Library,
   Book,
   Settings,
   RefreshCcw,
@@ -9,6 +8,7 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  Calendar,
 } from 'lucide-react';
 import type {
   LearningArtifact,
@@ -20,7 +20,7 @@ import type {
 
 const API_BASE = 'http://localhost:43010';
 
-type ViewType = 'inbox' | 'library' | 'story' | 'choices' | 'lesson' | 'settings';
+type ViewType = 'inbox' | 'story' | 'choices' | 'lesson' | 'settings';
 type FilterType = 'all' | 'english' | 'chinese';
 
 type DayGroup = {
@@ -41,6 +41,19 @@ const formatDayKey = (date: Date): string => {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
+
+const parseDayKey = (dayKey: string): Date => {
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const formatDateControlLabel = (dayKey: string): string => (
+  parseDayKey(dayKey).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+);
 
 const getDayLabel = (dayKey: string): string => {
   const todayKey = formatDayKey(new Date());
@@ -106,7 +119,7 @@ export default function App() {
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const todayKey = formatDayKey(new Date());
-  const [selectedDay, setSelectedDay] = useState<string | null>(todayKey);
+  const [selectedDay, setSelectedDay] = useState<string>(todayKey);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -157,13 +170,7 @@ export default function App() {
     })
   ), [artifacts, filter]);
 
-  const savedArtifacts = useMemo(
-    () => filteredArtifacts.filter((a) => a.isSaved),
-    [filteredArtifacts]
-  );
-
   const inboxArtifacts = useMemo(() => {
-    if (!selectedDay) return filteredArtifacts;
     return filteredArtifacts.filter((artifact) => (
       formatDayKey(new Date(artifact.createdAt)) === selectedDay
     ));
@@ -178,24 +185,10 @@ export default function App() {
     [filteredArtifacts]
   );
 
-  const todayIndex = useMemo(
-    () => dayOptions.findIndex((option) => option.day === todayKey),
-    [dayOptions, todayKey]
-  );
-
-  const visibleDays = useMemo(() => {
-    if (todayIndex === -1) return dayOptions.slice(0, 7);
-    return dayOptions.slice(todayIndex, todayIndex + 7);
-  }, [dayOptions, todayIndex]);
-
   const handleDayChange = useCallback((day: string) => {
     const next = day.trim();
-    if (!next) {
-      setSelectedDay(null);
-      return;
-    }
-    setSelectedDay(next);
-  }, []);
+    setSelectedDay(next || todayKey);
+  }, [todayKey]);
 
   return (
     <div className="app-container">
@@ -203,13 +196,18 @@ export default function App() {
         <h2>TypeLearn</h2>
         <nav className="nav-group">
           <NavItem active={view === 'inbox'} icon={<Inbox size={15}/>} label="Inbox" onClick={() => setView('inbox')} />
-          <NavItem active={view === 'library'} icon={<Library size={15}/>} label="Library" onClick={() => setView('library')} />
-          <NavItem active={view === 'choices'} icon={<MessageCircle size={15}/>} label={`Choices${choices.length ? ` (${choices.length})` : ''}`} onClick={() => setView('choices')} />
+          <NavItem active={view === 'choices'} icon={<MessageCircle size={15}/>} label="Review" hint={choices.length ? `${choices.length}` : undefined} onClick={() => setView('choices')} />
           <NavItem active={view === 'lesson'} icon={<Zap size={15}/>} label="Lesson" onClick={() => setView('lesson')} />
           <NavItem active={view === 'story'} icon={<Book size={15}/>} label="Story" onClick={() => setView('story')} />
           <NavItem active={view === 'settings'} icon={<Settings size={15}/>} label="Settings" onClick={() => setView('settings')} />
         </nav>
         <div style={{ marginTop: 'auto' }}>
+          {choices.length > 0 && (
+            <button className="review-hint" onClick={() => setView('choices')}>
+              <span className="review-hint-dot" />
+              <span>{choices.length} item{choices.length > 1 ? 's' : ''} can be reviewed later</span>
+            </button>
+          )}
           <button onClick={fetchData} className="nav-item" style={{ fontSize: '12px', color: '#999' }}>
             <RefreshCcw size={13} className={loading ? 'spinning' : ''} />
             <span>Sync</span>
@@ -220,20 +218,18 @@ export default function App() {
       <main className="main-content">
         <TopBar
           view={view}
-          currentFilter={filter}
-          onFilterChange={setFilter}
         />
         <div className="content-inner">
           {view === 'inbox' && (
             <InboxView
               artifacts={inboxArtifacts}
               dayOptions={dayOptions}
-              visibleDays={visibleDays}
+              currentFilter={filter}
+              onFilterChange={setFilter}
               selectedDay={selectedDay}
               onDayChange={handleDayChange}
             />
           )}
-          {view === 'library' && <InboxView artifacts={savedArtifacts} />}
           {view === 'choices' && <ChoicesView choices={choices} onResolved={fetchData} />}
           {view === 'lesson' && <LessonView daily={daily} />}
           {view === 'story' && <StoryView stories={stories} onGenerate={generateStory} />}
@@ -244,36 +240,38 @@ export default function App() {
   );
 }
 
-function NavItem({ active, icon, label, onClick }: { active: boolean, icon: React.ReactNode, label: string, onClick: () => void }) {
+function NavItem({
+  active,
+  icon,
+  label,
+  hint,
+  onClick
+}: {
+  active: boolean,
+  icon: React.ReactNode,
+  label: string,
+  hint?: string,
+  onClick: () => void
+}) {
   return (
     <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick}>
       {icon}
       <span>{label}</span>
+      {hint && <span className="nav-hint-badge">{hint}</span>}
     </button>
   );
 }
 
 function TopBar({
   view,
-  currentFilter,
-  onFilterChange,
 }: {
   view: ViewType;
-  currentFilter: FilterType;
-  onFilterChange: (f: FilterType) => void;
 }) {
-  const titles = { inbox: 'Inbox', library: 'Library', choices: 'Choices', lesson: 'Lesson', story: 'Story', settings: 'Settings' };
+  const titles = { inbox: 'Inbox', choices: 'Review', lesson: 'Lesson', story: 'Story', settings: 'Settings' };
   return (
     <div className="top-bar">
       <div className="top-bar-left">
         <div className="view-title">{titles[view]}</div>
-        {view === 'inbox' && (
-          <div className="toolbar">
-            <button className={`filter-pill ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
-            <button className={`filter-pill ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
-            <button className={`filter-pill ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -282,45 +280,33 @@ function TopBar({
 const InboxView = memo(function InboxView({
   artifacts,
   dayOptions,
-  visibleDays,
+  currentFilter,
+  onFilterChange,
   selectedDay,
   onDayChange,
 }: {
   artifacts?: LearningArtifact[];
   dayOptions?: DayOption[];
-  visibleDays?: DayOption[];
-  selectedDay?: string | null;
+  currentFilter: FilterType;
+  onFilterChange: (f: FilterType) => void;
+  selectedDay?: string;
   onDayChange?: (day: string) => void;
 }) {
-  const showDayScroller = Boolean(dayOptions && visibleDays && onDayChange);
-  const totalCount = dayOptions?.reduce((sum, option) => sum + option.count, 0) ?? 0;
-  const olderDays = dayOptions ? dayOptions.slice(7) : [];
-  const trackRef = useRef<HTMLDivElement | null>(null);
+  const showDayScroller = Boolean(dayOptions && onDayChange);
   const todayKey = formatDayKey(new Date());
   const hasToday = dayOptions?.some((option) => option.day === todayKey) ?? false;
-  const effectiveSelectedDay = selectedDay ?? (hasToday ? todayKey : null);
-  const showAll = selectedDay === null;
-
-  const scrollTrack = (direction: 'left' | 'right') => {
-    if (!trackRef.current) return;
-    const amount = direction === 'left' ? -260 : 260;
-    trackRef.current.scrollBy({ left: amount, behavior: 'smooth' });
-  };
+  const effectiveSelectedDay = selectedDay ?? (hasToday ? todayKey : todayKey);
+  const selectedOption = dayOptions?.find((option) => option.day === effectiveSelectedDay) ?? null;
 
   const stepDay = (direction: 'left' | 'right') => {
     if (!dayOptions || dayOptions.length === 0 || !onDayChange) return;
-    const currentDay = effectiveSelectedDay ?? todayKey;
+    const currentDay = effectiveSelectedDay;
     const currentIndex = dayOptions.findIndex((option) => option.day === currentDay);
     if (currentIndex === -1) return;
     const delta = direction === 'left' ? -1 : 1;
     const nextIndex = currentIndex + delta;
     if (nextIndex < 0 || nextIndex >= dayOptions.length) return;
-    const nextDay = dayOptions[nextIndex].day;
-    onDayChange(nextDay);
-    requestAnimationFrame(() => {
-      const target = trackRef.current?.querySelector<HTMLButtonElement>(`[data-day="${nextDay}"]`);
-      target?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    });
+    onDayChange(dayOptions[nextIndex].day);
   };
 
   const grid = !artifacts || artifacts.length === 0 ? (
@@ -341,73 +327,199 @@ const InboxView = memo(function InboxView({
 
   return (
     <div className="inbox-view">
-      <div className="day-scroller">
-        <button
-          className="day-scroll-btn"
-          type="button"
-          aria-label="Previous day"
-          onClick={() => {
-            stepDay('left');
-            scrollTrack('left');
-          }}
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <div className="day-scroller-track" ref={trackRef}>
-          <button
-            className={`day-pill ${showAll ? 'active' : ''}`}
-            onClick={() => onDayChange?.('')}
-          >
-            <span>All</span>
-            <span className="day-pill-count">{totalCount}</span>
-          </button>
-          {visibleDays?.map((option) => (
-            <button
-              key={option.day}
-              data-day={option.day}
-              className={`day-pill ${effectiveSelectedDay === option.day && !showAll ? 'active' : ''}`}
-              onClick={() => onDayChange?.(option.day)}
-            >
-              <span>{option.label}</span>
-              <span className="day-pill-count">{option.count}</span>
-            </button>
-          ))}
-          {olderDays.map((option) => (
-            <button
-              key={option.day}
-              data-day={option.day}
-              className={`day-pill ${effectiveSelectedDay === option.day && !showAll ? 'active' : ''}`}
-              onClick={() => onDayChange?.(option.day)}
-            >
-              <span>{option.label}</span>
-              <span className="day-pill-count">{option.count}</span>
-            </button>
-          ))}
+      <div className="inbox-controls">
+        <div className="filter-segment" role="tablist" aria-label="Inbox filter">
+          <button className={`filter-segment-item ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
+          <button className={`filter-segment-item ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
+          <button className={`filter-segment-item ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
         </div>
-        <button
-          className="day-scroll-btn"
-          type="button"
-          aria-label="Next day"
-          onClick={() => {
-            stepDay('right');
-            scrollTrack('right');
-          }}
-        >
-          <ChevronRight size={14} />
-        </button>
-        <div className="day-scroller-date">
-          <input
-            className="date-input"
-            type="date"
-            value={selectedDay ?? ''}
-            onChange={(event) => onDayChange?.(event.target.value)}
-          />
+
+        <div className="inbox-time-inline">
+          <span className="time-current-label">{selectedOption?.label ?? 'Today'}</span>
+
+          <div className="day-stepper">
+            <button
+              className="day-scroll-btn"
+              type="button"
+              aria-label="Previous day"
+              onClick={() => stepDay('left')}
+              disabled={!selectedOption}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              className="day-scroll-btn"
+              type="button"
+              aria-label="Next day"
+              onClick={() => stepDay('right')}
+              disabled={!selectedOption}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          <DatePopover day={effectiveSelectedDay} onDayChange={onDayChange} />
         </div>
       </div>
       {grid}
     </div>
   );
 });
+
+function DatePopover({
+  day,
+  onDayChange,
+}: {
+  day: string;
+  onDayChange?: (day: string) => void;
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const date = parseDayKey(day);
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
+
+  useEffect(() => {
+    const date = parseDayKey(day);
+    setViewMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+  }, [day]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const monthLabel = viewMonth.toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const calendarDays = useMemo(() => {
+    const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+    const firstWeekday = monthStart.getDay();
+    const gridStart = new Date(monthStart);
+    gridStart.setDate(monthStart.getDate() - firstWeekday);
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + index);
+      return {
+        key: formatDayKey(date),
+        date,
+        inMonth: date.getMonth() === viewMonth.getMonth(),
+        isToday: formatDayKey(date) === formatDayKey(new Date()),
+      };
+    });
+  }, [viewMonth]);
+
+  const chooseDay = (nextDay: string) => {
+    onDayChange?.(nextDay);
+    setIsOpen(false);
+  };
+
+  const shiftMonth = (delta: number) => {
+    setViewMonth((current) => new Date(current.getFullYear(), current.getMonth() + delta, 1));
+  };
+
+  return (
+    <div className="date-popover" ref={rootRef}>
+      <button
+        className={`date-trigger ${isOpen ? 'open' : ''}`}
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        aria-label="Choose date"
+        aria-expanded={isOpen}
+      >
+        <span>{formatDateControlLabel(day)}</span>
+        <Calendar size={15} />
+      </button>
+
+      {isOpen && (
+        <div className="date-popover-panel" role="dialog" aria-label="Calendar">
+          <div className="date-popover-header">
+            <button
+              className="calendar-nav-btn"
+              type="button"
+              onClick={() => shiftMonth(-1)}
+              aria-label="Previous month"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div className="calendar-month-label">{monthLabel}</div>
+            <button
+              className="calendar-nav-btn"
+              type="button"
+              onClick={() => shiftMonth(1)}
+              aria-label="Next month"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+
+          <div className="calendar-weekdays" aria-hidden="true">
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+
+          <div className="calendar-grid">
+            {calendarDays.map((entry) => {
+              const isSelected = entry.key === day;
+              const classes = [
+                'calendar-day',
+                entry.inMonth ? '' : 'calendar-day-muted',
+                isSelected ? 'calendar-day-selected' : '',
+                entry.isToday ? 'calendar-day-today' : '',
+              ].filter(Boolean).join(' ');
+
+              return (
+                <button
+                  key={entry.key}
+                  className={classes}
+                  type="button"
+                  onClick={() => chooseDay(entry.key)}
+                  aria-pressed={isSelected}
+                >
+                  {entry.date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="calendar-footer">
+            <button
+              className="calendar-today-link"
+              type="button"
+              onClick={() => chooseDay(formatDayKey(new Date()))}
+            >
+              Jump to today
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ArtifactCard = memo(function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
   const isExpression = artifact.type === 'Expression';
@@ -518,7 +630,8 @@ function ChoicesView({ choices, onResolved }: { choices: ChoiceItem[]; onResolve
   if (!choices.length) {
     return (
       <div style={{ textAlign: 'center', padding: '3rem', color: '#999' }}>
-        <p>No pending choices.</p>
+        <p>Nothing needs review right now.</p>
+        <p style={{ marginTop: 8, fontSize: 13 }}>TypeLearn will only save uncertain items here when they are worth checking later.</p>
       </div>
     );
   }
@@ -552,7 +665,7 @@ function ChoicesView({ choices, onResolved }: { choices: ChoiceItem[]; onResolve
             </div>
           </div>
           <div className="card-meta">
-            <span className="card-type-tag">Choice</span>
+            <span className="card-type-tag">Review</span>
             <span>{new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         </article>
