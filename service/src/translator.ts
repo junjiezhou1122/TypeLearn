@@ -265,10 +265,117 @@ function shouldAttemptRestoration(sourceText: string): boolean {
   return /[A-Za-z]/.test(trimmed);
 }
 
+const PINYIN_INITIALS = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's', 'y', 'w'];
+const PINYIN_FINALS = [
+  'iang',
+  'iong',
+  'uang',
+  'uai',
+  'iao',
+  'ian',
+  'ang',
+  'eng',
+  'ong',
+  'ing',
+  'uan',
+  'ue',
+  've',
+  'ua',
+  'uo',
+  'ui',
+  'ie',
+  'ia',
+  'iu',
+  'ai',
+  'ei',
+  'ao',
+  'ou',
+  'an',
+  'en',
+  'er',
+  'un',
+  'a',
+  'e',
+  'i',
+  'o',
+  'u',
+  'v',
+];
+
 export function isLikelyPinyin(sourceText: string): boolean {
-  if (!/^[A-Za-z0-9\s]+$/.test(sourceText)) return false;
-  if (!/[aeiouAEIOU]/.test(sourceText)) return false;
-  return true;
+  const trimmed = sourceText.trim();
+  if (trimmed.length < 4) return false;
+  if (!/^[A-Za-z0-9\s]+$/.test(trimmed)) return false;
+  if (!/[aeiouAEIOU]/.test(trimmed)) return false;
+
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  const pinyinLike = tokens.filter(isPinyinToken);
+
+  if (tokens.length >= 2) {
+    if (pinyinLike.length < 2) return false;
+    return pinyinLike.length / tokens.length >= 0.8;
+  }
+
+  const token = tokens[0];
+  if (!token || token.length < 6) return false;
+  return countPinyinSyllables(token) >= 2;
+}
+
+function isPinyinToken(token: string): boolean {
+  const normalized = token.toLowerCase().replace(/[1-5]/g, '');
+  if (normalized.length < 2 || normalized.length > 6) return false;
+  if (!/[aeiou]/.test(normalized)) return false;
+  return isPinyinSyllable(normalized);
+}
+
+function isPinyinSyllable(normalized: string): boolean {
+  if (PINYIN_FINALS.includes(normalized)) return true;
+  for (const initial of PINYIN_INITIALS) {
+    if (!normalized.startsWith(initial)) continue;
+    const rest = normalized.slice(initial.length);
+    if (PINYIN_FINALS.includes(rest)) return true;
+  }
+  return false;
+}
+
+function countPinyinSyllables(token: string): number {
+  const normalized = token.toLowerCase().replace(/[1-5]/g, '');
+  if (!normalized) return 0;
+
+  let index = 0;
+  let count = 0;
+
+  while (index < normalized.length) {
+    let initial = '';
+    for (const candidate of PINYIN_INITIALS) {
+      if (normalized.startsWith(candidate, index)) {
+        initial = candidate;
+        break;
+      }
+    }
+
+    let start = index + initial.length;
+    let final = matchPinyinFinal(normalized, start);
+
+    if (!final && initial) {
+      start = index;
+      final = matchPinyinFinal(normalized, start);
+    }
+
+    if (!final) return 0;
+
+    index = start + final.length;
+    count += 1;
+  }
+
+  return count;
+}
+
+function matchPinyinFinal(normalized: string, start: number): string | null {
+  for (const final of PINYIN_FINALS) {
+    if (normalized.startsWith(final, start)) return final;
+  }
+  return null;
 }
 
 async function restorePinyinChunk(chunk: string, settings: ProviderSettings): Promise<string | null> {

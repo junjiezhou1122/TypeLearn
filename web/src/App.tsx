@@ -268,21 +268,18 @@ function ChoicesView({ choices, onResolved }: { choices: ChoiceItem[]; onResolve
         <article key={c.id} className="artifact-card variant-expression">
           <div className="card-body">
             <p className="card-source">{c.mergedRaw}</p>
-            <p className="card-note" style={{ marginBottom: 10 }}>
-              Pick what you meant. Expires at {new Date(c.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
-            </p>
+
 
             <div style={{ display: 'grid', gap: 8 }}>
               {c.candidates.map((cand, idx) => (
                 <button
                   key={idx}
-                  className="button-primary"
-                  style={{ textAlign: 'left', padding: '10px 12px', fontSize: 13 }}
+                  className="choice-option"
                   onClick={() => select(c.id, idx)}
                   disabled={submitting === c.id}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{cand.enMain}</div>
-                  <div style={{ color: '#999' }}>{cand.intentZh}</div>
+                  <div className="choice-title">{cand.intentZh}</div>
+                  <div className="choice-subtext">英文表达：{cand.enMain}</div>
                 </button>
               ))}
             </div>

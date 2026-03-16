@@ -494,9 +494,10 @@ export class LearningStore {
       const providerConfigured = Boolean(this.#state.settings.baseUrl && this.#state.settings.model);
 
       const pinyinPresent = stream.tailFragments.some((f) => isLikelyPinyin(f.text));
+      const fragmentCount = stream.tailFragments.length;
       const shouldUseLlm =
         providerConfigured &&
-        (idleMs >= assembleDebounceMs || pinyinPresent || stream.tailFragments.length >= 10);
+        (idleMs >= assembleDebounceMs || fragmentCount >= 10 || (pinyinPresent && fragmentCount >= 4));
 
       const assignments: Assignment[] = shouldUseLlm
         ? await this.llmAssignUtterances(stream, nowMs)
@@ -517,14 +518,27 @@ export class LearningStore {
             continue;
           }
 
+          const mergedRaw = item.mergedRaw ?? mergeFragmentsText(stream.tailFragments, item.fragmentIds);
+          const isAmbiguousPinyin = item.languageHint === 'pinyin' || isLikelyPinyin(mergedRaw);
+          if (!isAmbiguousPinyin) {
+            item.fragmentIds.forEach((id) => consumedFragmentIds.add(id));
+            continue;
+          }
+
+          const filteredCandidates = await filterChoiceCandidates(mergedRaw, item.candidates, this.#state.settings);
+          if (!filteredCandidates.length) {
+            item.fragmentIds.forEach((id) => consumedFragmentIds.add(id));
+            continue;
+          }
+
           const choice: ChoiceItem = {
             id: crypto.randomUUID(),
             sourceApp,
             createdAt: nowIso,
-            mergedRaw: item.mergedRaw ?? mergeFragmentsText(stream.tailFragments, item.fragmentIds),
+            mergedRaw,
             languageHint: item.languageHint ?? 'pinyin',
             fragmentIds: [...item.fragmentIds],
-            candidates: item.candidates.slice(0, 5),
+            candidates: filteredCandidates.slice(0, 3),
             expiresAt: new Date(nowMs + choiceTtlMs).toISOString(),
           };
 
@@ -625,7 +639,7 @@ export class LearningStore {
       fragments,
       rules: {
         strictFilter: true,
-        choiceCandidates: 5,
+        choiceCandidates: 3,
         storySafe: true,
       },
     });
@@ -1037,6 +1051,132 @@ function guessLanguageHint(text: string): UtteranceLanguageHint {
   if (lang === 'english') return 'en';
   if (lang === 'mixed') return 'mixed';
   return 'unknown';
+}
+
+const CHOICE_META_PATTERNS = [
+  /\boption(s)?\b/i,
+  /\bselection\b/i,
+  /\bselect\b/i,
+  /\bchoose\b/i,
+  /\btranslate\b/i,
+  /\bexplanation\b/i,
+  /\blist\b/i,
+  /\bprovide\b/i,
+  /\brequest\b/i,
+  /\bconfirm\b/i,
+  /\bexpress\b/i,
+  /\bask\b/i,
+  /\bneed\b/i,
+  /\bcompare\b/i,
+  /\brecommend\b/i,
+  /\bdecide\b/i,
+  /\bindecisive\b/i,
+];
+
+const CHOICE_META_ZH_PATTERNS = [
+  /表达/,
+  /请求/,
+  /询问/,
+  /确认/,
+  /建议/,
+  /选择/,
+  /选项/,
+  /解释/,
+  /翻译/,
+  /举例/,
+  /例子/,
+  /继续/,
+  /帮助/,
+  /可能/,
+  /需要/,
+  /提供/,
+  /比较/,
+  /推荐/,
+  /决定/,
+  /犹豫/,
+  /说明/,
+  /描述/,
+];
+
+async function filterChoiceCandidates(
+  mergedRaw: string,
+  candidates: ChoiceCandidate[],
+  settings: ProviderSettings
+): Promise<ChoiceCandidate[]> {
+  if (!candidates.length) return [];
+
+  const trimmed = mergedRaw.trim();
+  if (!trimmed) return [];
+
+  let baseMeaningZh = '';
+  if (isLikelyPinyin(trimmed)) {
+    const restoration = await restoreChineseFromRomanized(trimmed, settings);
+    if (restoration.didRestore) {
+      baseMeaningZh = restoration.restoredText.trim();
+    }
+  }
+
+  const filtered = candidates.filter((candidate) => {
+    const intentZh = candidate.intentZh?.trim();
+    const enMain = candidate.enMain?.trim();
+    if (!intentZh || !enMain) return false;
+
+    if (baseMeaningZh) {
+      return hasChineseOverlap(baseMeaningZh, intentZh);
+    }
+
+    const combined = `${enMain} ${intentZh}`;
+    if (CHOICE_META_PATTERNS.some((pattern) => pattern.test(combined))) return false;
+    if (CHOICE_META_ZH_PATTERNS.some((pattern) => pattern.test(intentZh))) return false;
+    return true;
+  });
+
+  if (baseMeaningZh) {
+    const normalizedBase = normalizeChinese(baseMeaningZh);
+    const hasBase = filtered.some((candidate) => normalizeChinese(candidate.intentZh) === normalizedBase);
+    if (!hasBase) {
+      const translation = await translateToEnglish(baseMeaningZh, settings);
+      filtered.unshift({
+        intentZh: baseMeaningZh,
+        enMain: translation.englishText || baseMeaningZh,
+      });
+    }
+  }
+
+  return dedupeCandidates(filtered);
+}
+
+function normalizeChinese(text: string): string {
+  return text.replace(/\s+/g, '').replace(/[，。！？,.!?]/g, '').trim();
+}
+
+function hasChineseOverlap(a: string, b: string): boolean {
+  const aZh = extractChinese(a);
+  const bZh = extractChinese(b);
+  if (!aZh || !bZh) return false;
+
+  const minLen = Math.min(2, aZh.length);
+  for (let i = 0; i <= aZh.length - minLen; i += 1) {
+    const fragment = aZh.slice(i, i + minLen);
+    if (bZh.includes(fragment)) return true;
+  }
+  return false;
+}
+
+function extractChinese(text: string): string {
+  return (text.match(/[\u4e00-\u9fff]/g) ?? []).join('');
+}
+
+function dedupeCandidates(candidates: ChoiceCandidate[]): ChoiceCandidate[] {
+  const seen = new Set<string>();
+  const out: ChoiceCandidate[] = [];
+  for (const candidate of candidates) {
+    const key = `${normalizeChinese(candidate.intentZh)}|${candidate.enMain.trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(candidate);
+  }
+  return out;
 }
 
 function ruleAssignUtterances(

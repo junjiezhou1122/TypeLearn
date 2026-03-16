@@ -396,6 +396,44 @@ input:focus {
   transform: translateY(-1px);
 }
 
+/* --- CHOICE OPTIONS (softer) --- */
+.choice-option {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.choice-option:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.28);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.14);
+  transform: translateY(-1px);
+}
+
+.choice-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.choice-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.choice-subtext {
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
 /* --- FILTER PILLS (glass) --- */
 .filter-pill {
   font-size: 12px;
