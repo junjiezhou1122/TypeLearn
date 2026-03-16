@@ -186,7 +186,26 @@ body {
   color: var(--text-primary);
 }
 
-.toolbar { display: flex; gap: 4px; align-items: center; }
+.toolbar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 4px;
+}
+
+.toolbar-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.date-input {
+  width: 140px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
 
 .content-inner {
   padding: 24px 28px;
@@ -251,6 +270,48 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 12px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #999;
+}
+
+.inbox-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.day-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.day-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 6px 4px 0;
+}
+
+.day-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.day-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.day-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
 }
 
 .artifact-card {
@@ -465,27 +526,14 @@ input:focus {
 /* --- STORY (glass) --- */
 .story-page { max-width: 640px; margin: 0 auto; padding: 2rem 0; }
 
-.story-navigation {
+.story-empty {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #999;
   display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-.nav-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.nav-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.3;
 }
 
 .story-doc {
@@ -496,6 +544,32 @@ input:focus {
   box-shadow: var(--glass-shadow);
   border: 1px solid var(--glass-border);
   padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.story-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.story-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.story-lines h2 {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.story-lines ul {
+  margin: 0;
+  padding-left: 18px;
 }
 
 .story-doc h1 {
@@ -541,7 +615,7 @@ input:focus {
 }
 
 /* --- ANIMATIONS --- */
-.fade-in { animation: fadeIn 0.25s ease-out; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.18s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: translateY(0); } }
 .spinning { animation: spin 0.8s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
