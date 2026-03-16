@@ -1,12 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   Inbox,
   Library,
   Book,
   Settings,
   RefreshCcw,
-  ChevronLeft,
-  ChevronRight,
   MessageCircle,
   Zap,
 } from 'lucide-react';
@@ -23,6 +21,75 @@ const API_BASE = 'http://localhost:43010';
 type ViewType = 'inbox' | 'library' | 'story' | 'choices' | 'lesson' | 'settings';
 type FilterType = 'all' | 'english' | 'chinese';
 
+type DayGroup = {
+  day: string;
+  label: string;
+  items: LearningArtifact[];
+};
+
+const RECENT_DAYS = 3;
+
+const formatDayKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDayLabel = (dayKey: string): string => {
+  const todayKey = formatDayKey(new Date());
+  const yesterdayKey = formatDayKey(new Date(Date.now() - 86_400_000));
+  if (dayKey === todayKey) return 'Today';
+  if (dayKey === yesterdayKey) return 'Yesterday';
+  return new Date(`${dayKey}T00:00:00`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const groupByDay = (artifacts: LearningArtifact[]): DayGroup[] => {
+  const grouped = new Map<string, LearningArtifact[]>();
+  artifacts.forEach((artifact) => {
+    const dayKey = formatDayKey(new Date(artifact.createdAt));
+    const bucket = grouped.get(dayKey);
+    if (bucket) {
+      bucket.push(artifact);
+    } else {
+      grouped.set(dayKey, [artifact]);
+    }
+  });
+
+  return Array.from(grouped.entries())
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([day, items]) => ({ day, label: getDayLabel(day), items }));
+};
+
+const splitStorySections = (storyText: string): { body: string; stealLines: string[] } => {
+  if (!storyText) return { body: '', stealLines: [] };
+  const marker = 'steal these lines';
+  const lower = storyText.toLowerCase();
+  const idx = lower.indexOf(marker);
+  if (idx === -1) return { body: storyText.trim(), stealLines: [] };
+
+  const before = storyText.slice(0, idx).trim();
+  const after = storyText.slice(idx + marker.length).trim();
+  const lines = after.split('\n').map((line) => line.trim()).filter(Boolean);
+  const stealLines = lines
+    .filter((line) => /^[-•*]/.test(line) || /^\d+\./.test(line))
+    .map((line) => line.replace(/^[-•*]\s*/, '').replace(/^\d+\.\s*/, '').trim())
+    .filter(Boolean);
+
+  if (stealLines.length === 0) {
+    const fallbackLines = lines
+      .map((line) => line.replace(/^[-•*]\s*/, '').replace(/^\d+\.\s*/, '').trim())
+      .filter(Boolean);
+    return { body: before, stealLines: fallbackLines };
+  }
+
+  return { body: before, stealLines };
+};
+
 export default function App() {
   const [view, setView] = useState<ViewType>('inbox');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -32,8 +99,10 @@ export default function App() {
   const [daily, setDaily] = useState<DailyLesson | null>(null);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [showAllDays, setShowAllDays] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [artRes, storyRes, choiceRes, dailyRes, setRes] = await Promise.all([
@@ -61,16 +130,65 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const filteredArtifacts = artifacts.filter(a => {
-    if (filter === 'all') return true;
-    if (filter === 'english') return a.type === 'Refinement';
-    if (filter === 'chinese') return a.type === 'Expression';
-    return true;
-  });
+  const generateStory = useCallback(async () => {
+    try {
+      await fetch(`${API_BASE}/stories/generate`, { method: 'POST' });
+    } finally {
+      await fetchData();
+    }
+  }, [fetchData]);
+
+  const filteredArtifacts = useMemo(() => (
+    artifacts.filter((a) => {
+      if (filter === 'all') return true;
+      if (filter === 'english') return a.type === 'Refinement';
+      if (filter === 'chinese') return a.type === 'Expression';
+      return true;
+    })
+  ), [artifacts, filter]);
+
+  const savedArtifacts = useMemo(
+    () => filteredArtifacts.filter((a) => a.isSaved),
+    [filteredArtifacts]
+  );
+
+  const inboxArtifacts = useMemo(() => {
+    if (!selectedDay) return filteredArtifacts;
+    return filteredArtifacts.filter((artifact) => (
+      formatDayKey(new Date(artifact.createdAt)) === selectedDay
+    ));
+  }, [filteredArtifacts, selectedDay]);
+
+  const groupedArtifacts = useMemo(
+    () => groupByDay(inboxArtifacts),
+    [inboxArtifacts]
+  );
+
+  const visibleGroups = useMemo(() => {
+    if (showAllDays || selectedDay) return groupedArtifacts;
+    return groupedArtifacts.slice(0, RECENT_DAYS);
+  }, [groupedArtifacts, showAllDays, selectedDay]);
+
+  const showMoreDays = !selectedDay && !showAllDays && groupedArtifacts.length > RECENT_DAYS;
+
+  const handleDayChange = useCallback((day: string) => {
+    const next = day.trim();
+    setSelectedDay(next.length ? next : null);
+    setShowAllDays(false);
+  }, []);
+
+  const handleToday = useCallback(() => {
+    setSelectedDay(formatDayKey(new Date()));
+    setShowAllDays(false);
+  }, []);
+
+  const handleShowMore = useCallback(() => {
+    setShowAllDays(true);
+  }, []);
 
   return (
     <div className="app-container">
@@ -93,13 +211,26 @@ export default function App() {
       </aside>
 
       <main className="main-content">
-        <TopBar view={view} currentFilter={filter} onFilterChange={setFilter} />
-        <div className="content-inner fade-in">
-          {view === 'inbox' && <InboxView artifacts={filteredArtifacts} />}
-          {view === 'library' && <InboxView artifacts={filteredArtifacts.filter(a => a.isSaved)} />}
+        <TopBar
+          view={view}
+          currentFilter={filter}
+          onFilterChange={setFilter}
+          selectedDay={selectedDay}
+          onDayChange={handleDayChange}
+          onToday={handleToday}
+        />
+        <div className="content-inner">
+          {view === 'inbox' && (
+            <InboxView
+              groups={visibleGroups}
+              showMoreDays={showMoreDays}
+              onShowMore={handleShowMore}
+            />
+          )}
+          {view === 'library' && <InboxView artifacts={savedArtifacts} />}
           {view === 'choices' && <ChoicesView choices={choices} onResolved={fetchData} />}
           {view === 'lesson' && <LessonView daily={daily} />}
-          {view === 'story' && <StoryView stories={stories} />}
+          {view === 'story' && <StoryView stories={stories} onGenerate={generateStory} />}
           {view === 'settings' && settings && <SettingsView settings={settings} onUpdate={setSettings} />}
         </div>
       </main>
@@ -116,7 +247,21 @@ function NavItem({ active, icon, label, onClick }: { active: boolean, icon: Reac
   );
 }
 
-function TopBar({ view, currentFilter, onFilterChange }: { view: ViewType, currentFilter: FilterType, onFilterChange: (f: FilterType) => void }) {
+function TopBar({
+  view,
+  currentFilter,
+  onFilterChange,
+  selectedDay,
+  onDayChange,
+  onToday,
+}: {
+  view: ViewType;
+  currentFilter: FilterType;
+  onFilterChange: (f: FilterType) => void;
+  selectedDay: string | null;
+  onDayChange: (day: string) => void;
+  onToday: () => void;
+}) {
   const titles = { inbox: 'Inbox', library: 'Library', choices: 'Choices', lesson: 'Lesson', story: 'Story', settings: 'Settings' };
   return (
     <div className="top-bar">
@@ -127,6 +272,16 @@ function TopBar({ view, currentFilter, onFilterChange }: { view: ViewType, curre
             <button className={`filter-pill ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
             <button className={`filter-pill ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
             <button className={`filter-pill ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
+            <div className="toolbar-divider" />
+            <div className="toolbar-date">
+              <input
+                className="date-input"
+                type="date"
+                value={selectedDay ?? ''}
+                onChange={(event) => onDayChange(event.target.value)}
+              />
+              <button className="filter-pill" onClick={onToday}>Today</button>
+            </div>
           </div>
         )}
       </div>
@@ -134,21 +289,68 @@ function TopBar({ view, currentFilter, onFilterChange }: { view: ViewType, curre
   );
 }
 
-function InboxView({ artifacts }: { artifacts: LearningArtifact[] }) {
-  return (
-    <div className="content-grid">
-      {artifacts.length > 0 ? (
-        artifacts.map(a => <ArtifactCard key={a.id} artifact={a} />)
-      ) : (
-        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '3rem', color: '#999' }}>
+const InboxView = memo(function InboxView({
+  artifacts,
+  groups,
+  showMoreDays,
+  onShowMore,
+}: {
+  artifacts?: LearningArtifact[];
+  groups?: DayGroup[];
+  showMoreDays?: boolean;
+  onShowMore?: () => void;
+}) {
+  if (groups) {
+    if (groups.length === 0) {
+      return (
+        <div className="empty-state">
           <p>No items yet.</p>
         </div>
-      )}
+      );
+    }
+
+    return (
+      <div className="inbox-groups">
+        {groups.map((group) => (
+          <section key={group.day} className="day-group">
+            <div className="day-header">
+              <div className="day-title">{group.label}</div>
+              <div className="day-count">{group.items.length} items</div>
+            </div>
+            <div className="content-grid">
+              {group.items.map((artifact) => (
+                <ArtifactCard key={artifact.id} artifact={artifact} />
+              ))}
+            </div>
+          </section>
+        ))}
+        {showMoreDays && onShowMore && (
+          <div className="day-more">
+            <button className="button-primary" onClick={onShowMore}>Show more days</button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!artifacts || artifacts.length === 0) {
+    return (
+      <div className="empty-state">
+        <p>No items yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="content-grid">
+      {artifacts.map((artifact) => (
+        <ArtifactCard key={artifact.id} artifact={artifact} />
+      ))}
     </div>
   );
-}
+});
 
-function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
+const ArtifactCard = memo(function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
   const isExpression = artifact.type === 'Expression';
   const variantClass = isExpression ? 'variant-expression' : 'variant-refinement';
   const genericMessages = ['normalized capitalization', 'already looks clear', 'kept it as-is', 'natural in everyday writing'];
@@ -225,7 +427,7 @@ function ArtifactCard({ artifact }: { artifact: LearningArtifact }) {
       </div>
     </article>
   );
-}
+});
 
 function ChoicesView({ choices, onResolved }: { choices: ChoiceItem[]; onResolved: () => void }) {
   const [submitting, setSubmitting] = useState<string | null>(null);
@@ -349,28 +551,60 @@ function LessonView({ daily }: { daily: DailyLesson | null }) {
   );
 }
 
-function StoryView({ stories }: { stories: StoryArtifact[] }) {
-  const [idx, setIdx] = useState(0);
-  const story = stories[idx];
-  if (!story) return <div className="story-page" style={{ textAlign: 'center', padding: '4rem', color: '#999' }}>No stories yet.</div>;
+const StoryView = memo(function StoryView({
+  stories,
+  onGenerate,
+}: {
+  stories: StoryArtifact[];
+  onGenerate: () => void;
+}) {
+  const story = stories[0];
+  const { body, stealLines } = useMemo(
+    () => splitStorySections(story?.story ?? ''),
+    [story?.story]
+  );
+  const paragraphs = useMemo(
+    () => body.split(/\n+/).map((line) => line.trim()).filter(Boolean),
+    [body]
+  );
+
+  if (!story) {
+    return (
+      <div className="story-page">
+        <div className="story-empty">
+          <p>No stories yet.</p>
+          <button className="button-primary" onClick={onGenerate}>Generate story</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="story-page">
-      <div className="story-navigation">
-        <button className="button-primary nav-button" onClick={() => setIdx(idx + 1)} disabled={idx === stories.length - 1}><ChevronLeft size={14}/> Prev</button>
-        <span style={{ fontSize: '12px', fontWeight: 500, color: '#999' }}>{stories.length - idx} / {stories.length}</span>
-        <button className="button-primary nav-button" onClick={() => setIdx(idx - 1)} disabled={idx === 0}>Next <ChevronRight size={14}/></button>
-      </div>
       <article className="story-doc fade-in" key={story.id}>
-        <h1>{story.title}</h1>
-        <div className="date">{new Date(story.createdAt).toLocaleDateString()}</div>
-        <div className="content">
-          {story.story.split('\n').map((p, i) => <p key={i} style={{ marginBottom: '1rem' }}>{p}</p>)}
+        <div className="story-header">
+          <div>
+            <h1>{story.title || "Today's Story"}</h1>
+            <div className="date">{new Date(story.createdAt).toLocaleDateString()}</div>
+          </div>
+          <button className="button-primary" onClick={onGenerate}>Generate story</button>
         </div>
+        <div className="story-note">Generated from today's completed captures; falls back to a safe template if no provider is configured.</div>
+        <div className="content">
+          {paragraphs.map((p, i) => <p key={i} style={{ marginBottom: '1rem' }}>{p}</p>)}
+        </div>
+        {stealLines.length > 0 && (
+          <div className="story-lines">
+            <h2>Steal these lines</h2>
+            <ul>
+              {stealLines.map((line, i) => <li key={i}>{line}</li>)}
+            </ul>
+          </div>
+        )}
       </article>
     </div>
   );
-}
+});
 
 function SettingsView({ settings, onUpdate }: { settings: ProviderSettings, onUpdate: (s: ProviderSettings) => void }) {
   const [form, setForm] = useState(settings);
