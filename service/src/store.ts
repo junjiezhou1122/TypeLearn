@@ -819,6 +819,7 @@ export class LearningStore {
 
       const restoration = await restoreChineseFromRomanized(record.sourceText, this.#state.settings);
       const textZhOrRaw = restoration.didRestore ? restoration.restoredText : record.sourceText;
+      const hasChinese = /[\u4e00-\u9fff]/.test(textZhOrRaw);
 
       if (providerConfigured) {
         const cn2en = await extractLearningCn2En(this.#state.settings, { textZhOrPinyin: textZhOrRaw });
@@ -842,7 +843,7 @@ export class LearningStore {
           ...record,
           restoredText: restoration.didRestore ? restoration.restoredText : null,
           englishText: enMain,
-          intentZh: restoration.didRestore ? restoration.restoredText : undefined,
+          intentZh: restoration.didRestore ? restoration.restoredText : hasChinese ? textZhOrRaw : undefined,
           enAlternatives: cn2en.enAlternatives,
           enTemplates: cn2en.enTemplates,
           sourceLanguage: detectLanguage(textZhOrRaw),

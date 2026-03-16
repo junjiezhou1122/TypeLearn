@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import {
   Inbox,
   Library,
@@ -7,6 +7,8 @@ import {
   RefreshCcw,
   MessageCircle,
   Zap,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type {
   LearningArtifact,
@@ -27,7 +29,11 @@ type DayGroup = {
   items: LearningArtifact[];
 };
 
-const RECENT_DAYS = 3;
+type DayOption = {
+  day: string;
+  label: string;
+  count: number;
+};
 
 const formatDayKey = (date: Date): string => {
   const year = date.getFullYear();
@@ -99,8 +105,8 @@ export default function App() {
   const [daily, setDaily] = useState<DailyLesson | null>(null);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [showAllDays, setShowAllDays] = useState(false);
+  const todayKey = formatDayKey(new Date());
+  const [selectedDay, setSelectedDay] = useState<string | null>(todayKey);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -117,7 +123,7 @@ export default function App() {
       setArtifacts(
         arts.map((a) => ({
           ...a,
-          type: a.intentZh || a.restoredText ? 'Expression' : 'Refinement',
+          type: a.intentZh || a.restoredText || /[\u4e00-\u9fff]/.test(a.sourceText) ? 'Expression' : 'Refinement',
         }))
       );
 
@@ -163,31 +169,32 @@ export default function App() {
     ));
   }, [filteredArtifacts, selectedDay]);
 
-  const groupedArtifacts = useMemo(
-    () => groupByDay(inboxArtifacts),
-    [inboxArtifacts]
+  const dayOptions = useMemo<DayOption[]>(
+    () => groupByDay(filteredArtifacts).map((group) => ({
+      day: group.day,
+      label: group.label,
+      count: group.items.length,
+    })),
+    [filteredArtifacts]
   );
 
-  const visibleGroups = useMemo(() => {
-    if (showAllDays || selectedDay) return groupedArtifacts;
-    return groupedArtifacts.slice(0, RECENT_DAYS);
-  }, [groupedArtifacts, showAllDays, selectedDay]);
+  const todayIndex = useMemo(
+    () => dayOptions.findIndex((option) => option.day === todayKey),
+    [dayOptions, todayKey]
+  );
 
-  const showMoreDays = !selectedDay && !showAllDays && groupedArtifacts.length > RECENT_DAYS;
+  const visibleDays = useMemo(() => {
+    if (todayIndex === -1) return dayOptions.slice(0, 7);
+    return dayOptions.slice(todayIndex, todayIndex + 7);
+  }, [dayOptions, todayIndex]);
 
   const handleDayChange = useCallback((day: string) => {
     const next = day.trim();
-    setSelectedDay(next.length ? next : null);
-    setShowAllDays(false);
-  }, []);
-
-  const handleToday = useCallback(() => {
-    setSelectedDay(formatDayKey(new Date()));
-    setShowAllDays(false);
-  }, []);
-
-  const handleShowMore = useCallback(() => {
-    setShowAllDays(true);
+    if (!next) {
+      setSelectedDay(null);
+      return;
+    }
+    setSelectedDay(next);
   }, []);
 
   return (
@@ -215,16 +222,15 @@ export default function App() {
           view={view}
           currentFilter={filter}
           onFilterChange={setFilter}
-          selectedDay={selectedDay}
-          onDayChange={handleDayChange}
-          onToday={handleToday}
         />
         <div className="content-inner">
           {view === 'inbox' && (
             <InboxView
-              groups={visibleGroups}
-              showMoreDays={showMoreDays}
-              onShowMore={handleShowMore}
+              artifacts={inboxArtifacts}
+              dayOptions={dayOptions}
+              visibleDays={visibleDays}
+              selectedDay={selectedDay}
+              onDayChange={handleDayChange}
             />
           )}
           {view === 'library' && <InboxView artifacts={savedArtifacts} />}
@@ -251,16 +257,10 @@ function TopBar({
   view,
   currentFilter,
   onFilterChange,
-  selectedDay,
-  onDayChange,
-  onToday,
 }: {
   view: ViewType;
   currentFilter: FilterType;
   onFilterChange: (f: FilterType) => void;
-  selectedDay: string | null;
-  onDayChange: (day: string) => void;
-  onToday: () => void;
 }) {
   const titles = { inbox: 'Inbox', library: 'Library', choices: 'Choices', lesson: 'Lesson', story: 'Story', settings: 'Settings' };
   return (
@@ -272,16 +272,6 @@ function TopBar({
             <button className={`filter-pill ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
             <button className={`filter-pill ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
             <button className={`filter-pill ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
-            <div className="toolbar-divider" />
-            <div className="toolbar-date">
-              <input
-                className="date-input"
-                type="date"
-                value={selectedDay ?? ''}
-                onChange={(event) => onDayChange(event.target.value)}
-              />
-              <button className="filter-pill" onClick={onToday}>Today</button>
-            </div>
           </div>
         )}
       </div>
@@ -291,61 +281,130 @@ function TopBar({
 
 const InboxView = memo(function InboxView({
   artifacts,
-  groups,
-  showMoreDays,
-  onShowMore,
+  dayOptions,
+  visibleDays,
+  selectedDay,
+  onDayChange,
 }: {
   artifacts?: LearningArtifact[];
-  groups?: DayGroup[];
-  showMoreDays?: boolean;
-  onShowMore?: () => void;
+  dayOptions?: DayOption[];
+  visibleDays?: DayOption[];
+  selectedDay?: string | null;
+  onDayChange?: (day: string) => void;
 }) {
-  if (groups) {
-    if (groups.length === 0) {
-      return (
-        <div className="empty-state">
-          <p>No items yet.</p>
-        </div>
-      );
-    }
+  const showDayScroller = Boolean(dayOptions && visibleDays && onDayChange);
+  const totalCount = dayOptions?.reduce((sum, option) => sum + option.count, 0) ?? 0;
+  const olderDays = dayOptions ? dayOptions.slice(7) : [];
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const todayKey = formatDayKey(new Date());
+  const hasToday = dayOptions?.some((option) => option.day === todayKey) ?? false;
+  const effectiveSelectedDay = selectedDay ?? (hasToday ? todayKey : null);
+  const showAll = selectedDay === null;
 
-    return (
-      <div className="inbox-groups">
-        {groups.map((group) => (
-          <section key={group.day} className="day-group">
-            <div className="day-header">
-              <div className="day-title">{group.label}</div>
-              <div className="day-count">{group.items.length} items</div>
-            </div>
-            <div className="content-grid">
-              {group.items.map((artifact) => (
-                <ArtifactCard key={artifact.id} artifact={artifact} />
-              ))}
-            </div>
-          </section>
-        ))}
-        {showMoreDays && onShowMore && (
-          <div className="day-more">
-            <button className="button-primary" onClick={onShowMore}>Show more days</button>
-          </div>
-        )}
-      </div>
-    );
-  }
+  const scrollTrack = (direction: 'left' | 'right') => {
+    if (!trackRef.current) return;
+    const amount = direction === 'left' ? -260 : 260;
+    trackRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+  };
 
-  if (!artifacts || artifacts.length === 0) {
-    return (
-      <div className="empty-state">
-        <p>No items yet.</p>
-      </div>
-    );
-  }
+  const stepDay = (direction: 'left' | 'right') => {
+    if (!dayOptions || dayOptions.length === 0 || !onDayChange) return;
+    const currentDay = effectiveSelectedDay ?? todayKey;
+    const currentIndex = dayOptions.findIndex((option) => option.day === currentDay);
+    if (currentIndex === -1) return;
+    const delta = direction === 'left' ? -1 : 1;
+    const nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= dayOptions.length) return;
+    const nextDay = dayOptions[nextIndex].day;
+    onDayChange(nextDay);
+    requestAnimationFrame(() => {
+      const target = trackRef.current?.querySelector<HTMLButtonElement>(`[data-day="${nextDay}"]`);
+      target?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  };
 
-  return (
+  const grid = !artifacts || artifacts.length === 0 ? (
+    <div className="empty-state">
+      <p>No items yet.</p>
+    </div>
+  ) : (
     <div className="content-grid">
       {artifacts.map((artifact) => (
         <ArtifactCard key={artifact.id} artifact={artifact} />
       ))}
+    </div>
+  );
+
+  if (!showDayScroller) {
+    return grid;
+  }
+
+  return (
+    <div className="inbox-view">
+      <div className="day-scroller">
+        <button
+          className="day-scroll-btn"
+          type="button"
+          aria-label="Previous day"
+          onClick={() => {
+            stepDay('left');
+            scrollTrack('left');
+          }}
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <div className="day-scroller-track" ref={trackRef}>
+          <button
+            className={`day-pill ${showAll ? 'active' : ''}`}
+            onClick={() => onDayChange?.('')}
+          >
+            <span>All</span>
+            <span className="day-pill-count">{totalCount}</span>
+          </button>
+          {visibleDays?.map((option) => (
+            <button
+              key={option.day}
+              data-day={option.day}
+              className={`day-pill ${effectiveSelectedDay === option.day && !showAll ? 'active' : ''}`}
+              onClick={() => onDayChange?.(option.day)}
+            >
+              <span>{option.label}</span>
+              <span className="day-pill-count">{option.count}</span>
+            </button>
+          ))}
+          {olderDays.map((option) => (
+            <button
+              key={option.day}
+              data-day={option.day}
+              className={`day-pill ${effectiveSelectedDay === option.day && !showAll ? 'active' : ''}`}
+              onClick={() => onDayChange?.(option.day)}
+            >
+              <span>{option.label}</span>
+              <span className="day-pill-count">{option.count}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          className="day-scroll-btn"
+          type="button"
+          aria-label="Next day"
+          onClick={() => {
+            stepDay('right');
+            scrollTrack('right');
+          }}
+        >
+          <ChevronRight size={14} />
+        </button>
+        <div className="day-scroller-date">
+          <input
+            className="date-input"
+            type="date"
+            value={selectedDay ?? ''}
+            onChange={(event) => onDayChange?.(event.target.value)}
+          />
+        </div>
+      </div>
+      {grid}
     </div>
   );
 });

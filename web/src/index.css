@@ -213,6 +213,119 @@ body {
   z-index: 1;
 }
 
+.inbox-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.day-scroller {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.day-scroll-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
+}
+
+.day-scroll-btn:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.day-scroller-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.day-scroller-track::-webkit-scrollbar {
+  height: 4px;
+}
+
+.day-scroller-track::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.2);
+  border-radius: 999px;
+}
+
+.day-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.day-pill:hover {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.7);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.day-pill.active {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(139, 92, 246, 0.35);
+  color: var(--purple);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);
+}
+
+.day-pill-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.day-pill.active .day-pill-count {
+  color: var(--purple);
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.day-scroller-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
 /* --- SETTINGS (glass) --- */
 .settings-wrapper {
   max-width: 560px;
