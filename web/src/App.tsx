@@ -37,6 +37,11 @@ type DayOption = {
   count: number;
 };
 
+type DigestFocus =
+  | { type: 'pattern'; id: string }
+  | { type: 'moment'; id: string }
+  | { type: 'session'; id: string };
+
 const formatDayKey = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -284,22 +289,20 @@ function TopBar({
   );
 }
 
-const DayScroller = memo(function DayScroller({
+const InboxHeaderControls = memo(function InboxHeaderControls({
   dayOptions,
+  currentFilter,
+  onFilterChange,
   selectedDay,
   onDayChange,
 }: {
   dayOptions: DayOption[];
+  currentFilter: FilterType;
+  onFilterChange: (f: FilterType) => void;
   selectedDay: string;
   onDayChange: (day: string) => void;
 }) {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-
-  const scrollTrack = (direction: 'left' | 'right') => {
-    if (!trackRef.current) return;
-    const amount = direction === 'left' ? -260 : 260;
-    trackRef.current.scrollBy({ left: amount, behavior: 'smooth' });
-  };
+  const selectedOption = dayOptions.find((option) => option.day === selectedDay) ?? null;
 
   const stepDay = (direction: 'left' | 'right') => {
     if (dayOptions.length === 0) return;
@@ -308,58 +311,108 @@ const DayScroller = memo(function DayScroller({
     const delta = direction === 'left' ? -1 : 1;
     const nextIndex = currentIndex + delta;
     if (nextIndex < 0 || nextIndex >= dayOptions.length) return;
-    const nextDay = dayOptions[nextIndex].day;
-    onDayChange(nextDay);
-    requestAnimationFrame(() => {
-      const target = trackRef.current?.querySelector<HTMLButtonElement>(`[data-day="${nextDay}"]`);
-      target?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-    });
+    onDayChange(dayOptions[nextIndex].day);
   };
 
   return (
-    <div className="day-scroller">
-      <button
-        className="day-scroll-btn"
-        type="button"
-        aria-label="Previous day"
-        onClick={() => {
-          stepDay('left');
-          scrollTrack('left');
-        }}
-      >
-        <ChevronLeft size={14} />
-      </button>
-      <div className="day-scroller-track" ref={trackRef}>
-        {dayOptions.map((option) => (
-          <button
-            key={option.day}
-            data-day={option.day}
-            className={`day-pill ${selectedDay === option.day ? 'active' : ''}`}
-            onClick={() => onDayChange(option.day)}
-          >
-            <span>{option.label}</span>
-            <span className="day-pill-count">{option.count}</span>
-          </button>
-        ))}
+    <div className="inbox-controls">
+      <div className="filter-segment" role="tablist" aria-label="Inbox filter">
+        <button className={`filter-segment-item ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
+        <button className={`filter-segment-item ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
+        <button className={`filter-segment-item ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
       </div>
-      <button
-        className="day-scroll-btn"
-        type="button"
-        aria-label="Next day"
-        onClick={() => {
-          stepDay('right');
-          scrollTrack('right');
-        }}
-      >
-        <ChevronRight size={14} />
-      </button>
-      <div className="day-scroller-date">
-        <input
-          className="date-input"
-          type="date"
-          value={selectedDay}
-          onChange={(event) => onDayChange(event.target.value)}
-        />
+
+      <div className="inbox-time-inline">
+        <span className="time-current-label">{selectedOption?.label ?? 'Today'}</span>
+
+        <div className="day-stepper">
+          <button
+            className="day-scroll-btn"
+            type="button"
+            aria-label="Previous day"
+            onClick={() => stepDay('left')}
+            disabled={!selectedOption}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            className="day-scroll-btn"
+            type="button"
+            aria-label="Next day"
+            onClick={() => stepDay('right')}
+            disabled={!selectedOption}
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+
+        <div className="day-scroller-date">
+          <DatePopover day={selectedDay} onDayChange={onDayChange} />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const DigestHeaderControls = memo(function DigestHeaderControls({
+  digest,
+  dayOptions,
+  selectedDay,
+  onDayChange,
+}: {
+  digest: DayDigest | null;
+  dayOptions: DayOption[];
+  selectedDay: string;
+  onDayChange: (day: string) => void;
+}) {
+  const selectedOption = dayOptions.find((option) => option.day === selectedDay) ?? null;
+
+  const stepDay = (direction: 'left' | 'right') => {
+    if (dayOptions.length === 0) return;
+    const currentIndex = dayOptions.findIndex((option) => option.day === selectedDay);
+    if (currentIndex === -1) return;
+    const delta = direction === 'left' ? -1 : 1;
+    const nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= dayOptions.length) return;
+    onDayChange(dayOptions[nextIndex].day);
+  };
+
+  return (
+    <div className="inbox-controls digest-controls">
+      <div className="digest-toolbar-copy">
+        <div className="digest-toolbar-title">{selectedOption?.label ?? 'Today'}</div>
+        <div className="digest-toolbar-subtitle">
+          {digest
+            ? `${digest.sessionCount} session${digest.sessionCount > 1 ? 's' : ''} · ${digest.keyMoments.length} key moment${digest.keyMoments.length > 1 ? 's' : ''}`
+            : 'No digest generated for this day yet'}
+        </div>
+      </div>
+
+      <div className="inbox-time-inline">
+        <div className="day-stepper">
+          <button
+            className="day-scroll-btn"
+            type="button"
+            aria-label="Previous day"
+            onClick={() => stepDay('left')}
+            disabled={!selectedOption}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            className="day-scroll-btn"
+            type="button"
+            aria-label="Next day"
+            onClick={() => stepDay('right')}
+            disabled={!selectedOption}
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+
+        <div className="day-scroller-date">
+          <DatePopover day={selectedDay} onDayChange={onDayChange} />
+        </div>
       </div>
     </div>
   );
@@ -384,18 +437,6 @@ const InboxView = memo(function InboxView({
   const todayKey = formatDayKey(new Date());
   const hasToday = dayOptions?.some((option) => option.day === todayKey) ?? false;
   const effectiveSelectedDay = selectedDay ?? (hasToday ? todayKey : todayKey);
-  const selectedOption = dayOptions?.find((option) => option.day === effectiveSelectedDay) ?? null;
-
-  const stepDay = (direction: 'left' | 'right') => {
-    if (!dayOptions || dayOptions.length === 0 || !onDayChange) return;
-    const currentDay = effectiveSelectedDay;
-    const currentIndex = dayOptions.findIndex((option) => option.day === currentDay);
-    if (currentIndex === -1) return;
-    const delta = direction === 'left' ? -1 : 1;
-    const nextIndex = currentIndex + delta;
-    if (nextIndex < 0 || nextIndex >= dayOptions.length) return;
-    onDayChange(dayOptions[nextIndex].day);
-  };
 
   const grid = !artifacts || artifacts.length === 0 ? (
     <div className="empty-state">
@@ -415,40 +456,13 @@ const InboxView = memo(function InboxView({
 
   return (
     <div className="inbox-view">
-      <div className="inbox-controls">
-        <div className="filter-segment" role="tablist" aria-label="Inbox filter">
-          <button className={`filter-segment-item ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => onFilterChange('all')}>All</button>
-          <button className={`filter-segment-item ${currentFilter === 'english' ? 'active' : ''}`} onClick={() => onFilterChange('english')}>English</button>
-          <button className={`filter-segment-item ${currentFilter === 'chinese' ? 'active' : ''}`} onClick={() => onFilterChange('chinese')}>Chinese</button>
-        </div>
-
-        <div className="inbox-time-inline">
-          <span className="time-current-label">{selectedOption?.label ?? 'Today'}</span>
-
-          <div className="day-stepper">
-            <button
-              className="day-scroll-btn"
-              type="button"
-              aria-label="Previous day"
-              onClick={() => stepDay('left')}
-              disabled={!selectedOption}
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              className="day-scroll-btn"
-              type="button"
-              aria-label="Next day"
-              onClick={() => stepDay('right')}
-              disabled={!selectedOption}
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-
-          <DatePopover day={effectiveSelectedDay} onDayChange={onDayChange} />
-        </div>
-      </div>
+      <InboxHeaderControls
+        dayOptions={dayOptions ?? []}
+        currentFilter={currentFilter}
+        onFilterChange={onFilterChange}
+        selectedDay={effectiveSelectedDay}
+        onDayChange={(day) => onDayChange?.(day)}
+      />
       {grid}
     </div>
   );
@@ -819,26 +833,119 @@ const DigestView = memo(function DigestView({
   dayOptions: DayOption[];
   onDayChange: (day: string) => void;
 }) {
+  const [focus, setFocus] = useState<DigestFocus | null>(null);
   const displayDate = new Date(`${selectedDay}T00:00:00`).toLocaleDateString();
+  const compressionRate = digest
+    ? Math.max(0, Math.round((1 - (digest.keyMoments.length / Math.max(digest.sourceRecordIds.length, 1))) * 100))
+    : 0;
+  const averageRecordsPerSession = digest
+    ? Math.round((digest.sourceRecordIds.length / Math.max(digest.sessionCount, 1)) * 10) / 10
+    : 0;
+
+  useEffect(() => {
+    setFocus(null);
+  }, [selectedDay, digest?.day]);
 
   if (!digest) {
     return (
       <div className="digest-page">
-        <DayScroller
+        <DigestHeaderControls
+          digest={digest}
           dayOptions={dayOptions}
           selectedDay={selectedDay}
           onDayChange={onDayChange}
         />
-        <div className="story-empty">
-          <p>No digest for {displayDate} yet.</p>
-        </div>
+        <section className="digest-card digest-card-empty">
+          <div className="story-empty">
+            <p>No digest for {displayDate} yet.</p>
+            <div className="digest-empty-note">Pick another day with records, or keep typing to build a digest here.</div>
+          </div>
+        </section>
       </div>
     );
   }
 
+  const digestData = digest;
+  const focusedPattern = focus?.type === 'pattern'
+    ? (digestData.topPatterns.find((pattern) => pattern.patternKey === focus.id) ?? null)
+    : focus?.type === 'moment'
+      ? (digestData.keyMoments.find((moment) => moment.recordId === focus.id)?.patternKeys
+          .map((patternKey) => digestData.topPatterns.find((pattern) => pattern.patternKey === patternKey))
+          .find(Boolean) ?? null)
+      : focus?.type === 'session'
+        ? (digestData.sessionDigests.find((session) => session.id === focus.id)?.topPatternKeys
+            .map((patternKey) => digestData.topPatterns.find((pattern) => pattern.patternKey === patternKey))
+            .find(Boolean) ?? null)
+        : null;
+  const focusedMoment = focus?.type === 'moment'
+    ? (digestData.keyMoments.find((moment) => moment.recordId === focus.id) ?? null)
+    : null;
+  const focusedSession = focus?.type === 'session'
+    ? (digestData.sessionDigests.find((session) => session.id === focus.id) ?? null)
+    : focus?.type === 'moment'
+      ? (digestData.sessionDigests.find((session) => session.recordIds.includes(focus.id)) ?? null)
+      : null;
+
+  const patternIsActive = (patternKey: string): boolean => {
+    if (!focus) return false;
+    if (focus.type === 'pattern') return focus.id === patternKey;
+    if (focus.type === 'moment') {
+      return digestData.keyMoments.find((moment) => moment.recordId === focus.id)?.patternKeys.includes(patternKey) ?? false;
+    }
+    return digestData.sessionDigests.find((session) => session.id === focus.id)?.topPatternKeys.includes(patternKey) ?? false;
+  };
+
+  const momentIsActive = (recordId: string, patternKeys: string[]): boolean => {
+    if (!focus) return false;
+    if (focus.type === 'moment') return focus.id === recordId;
+    if (focus.type === 'pattern') return patternKeys.includes(focus.id);
+    return digestData.sessionDigests.find((session) => session.id === focus.id)?.recordIds.includes(recordId) ?? false;
+  };
+
+  const sessionIsActive = (sessionId: string, sessionRecordIds: string[], topPatternKeys: string[]): boolean => {
+    if (!focus) return false;
+    if (focus.type === 'session') return focus.id === sessionId;
+    if (focus.type === 'pattern') return topPatternKeys.includes(focus.id);
+    return sessionRecordIds.includes(focus.id);
+  };
+
+  const activeSessions = !focus
+    ? digestData.sessionDigests
+    : digestData.sessionDigests.filter((session) => sessionIsActive(session.id, session.recordIds, session.topPatternKeys));
+  const activeMoments = !focus
+    ? digestData.keyMoments
+    : digestData.keyMoments.filter((moment) => momentIsActive(moment.recordId, moment.patternKeys));
+  const activeRecordIds = Array.from(new Set(
+    focus?.type === 'moment'
+      ? [focus.id]
+      : activeSessions.flatMap((session) => session.recordIds),
+  ));
+  const activeStealLines = Array.from(new Set(
+    focus?.type === 'pattern' && focusedPattern
+      ? focusedPattern.sampleLines
+      : activeSessions.flatMap((session) => session.stealLines),
+  ));
+  const focusTitle =
+    focus?.type === 'pattern' && focusedPattern
+      ? focusedPattern.title
+      : focus?.type === 'moment' && focusedMoment
+        ? (focusedMoment.enMain || focusedMoment.intentZh || 'selected moment')
+        : focus?.type === 'session' && focusedSession
+          ? `Session ${digestData.sessionDigests.findIndex((session) => session.id === focusedSession.id) + 1}`
+          : null;
+  const focusLead =
+    focus?.type === 'pattern'
+      ? `This pattern appears across ${activeSessions.length} session${activeSessions.length === 1 ? '' : 's'} and shapes ${activeMoments.length} key moment${activeMoments.length === 1 ? '' : 's'}.`
+      : focus?.type === 'moment'
+        ? `This moment belongs to ${activeSessions.length} session and carries ${focusedMoment?.patternKeys.length ?? 0} linked pattern${(focusedMoment?.patternKeys.length ?? 0) === 1 ? '' : 's'}.`
+        : focus?.type === 'session'
+          ? `This session contributes ${activeRecordIds.length} source record${activeRecordIds.length === 1 ? '' : 's'} and ${activeMoments.length} key moment${activeMoments.length === 1 ? '' : 's'} to the digest.`
+          : null;
+
   return (
     <div className="digest-page">
-      <DayScroller
+      <DigestHeaderControls
+        digest={digest}
         dayOptions={dayOptions}
         selectedDay={selectedDay}
         onDayChange={onDayChange}
@@ -847,9 +954,31 @@ const DigestView = memo(function DigestView({
         <section className="digest-card digest-card-hero">
           <div className="digest-kicker">Compressed day summary</div>
           <h1>{displayDate}</h1>
+          <div className="digest-hero-bar" />
           <p className="digest-lead">
             {digest.stats.totalDoneRecords} committed learning records compressed into {digest.sessionCount} session{digest.sessionCount > 1 ? 's' : ''} and {digest.keyMoments.length} key moment{digest.keyMoments.length > 1 ? 's' : ''}.
           </p>
+          {focusTitle && focusLead && (
+            <div className="digest-hero-focus">
+              <div className="digest-hero-focus-kicker">Current focus</div>
+              <div className="digest-hero-focus-title">{focusTitle}</div>
+              <div className="digest-hero-focus-copy">{focusLead}</div>
+            </div>
+          )}
+          <div className="digest-metric-strip">
+            <div className="digest-metric-chip">
+              <span className="digest-metric-value">{focus ? activeRecordIds.length : compressionRate}{focus ? '' : '%'}</span>
+              <span className="digest-metric-label">{focus ? 'records in focus' : 'compressed'}</span>
+            </div>
+            <div className="digest-metric-chip">
+              <span className="digest-metric-value">{focus ? activeSessions.length : averageRecordsPerSession}</span>
+              <span className="digest-metric-label">{focus ? 'sessions in focus' : 'records / session'}</span>
+            </div>
+            <div className="digest-metric-chip">
+              <span className="digest-metric-value">{focus ? activeStealLines.length : digest.stealLines.length}</span>
+              <span className="digest-metric-label">{focus ? 'lines in focus' : 'steal lines kept'}</span>
+            </div>
+          </div>
           <div className="digest-chip-row">
             {digest.themes.length > 0
               ? digest.themes.map((theme) => <span key={theme} className="story-chip">{theme}</span>)
@@ -857,8 +986,33 @@ const DigestView = memo(function DigestView({
           </div>
         </section>
 
+        <section className="digest-card digest-card-wide">
+          <div className="digest-section-title">Compression Flow</div>
+          <div className="digest-flow">
+            <div className={`digest-flow-step ${focus ? 'active' : ''}`}>
+              <div className="digest-flow-count">{focus ? activeRecordIds.length : digest.stats.totalRecords}</div>
+              <div className="digest-flow-label">{focus ? 'focused records' : 'visible records'}</div>
+            </div>
+            <div className="digest-flow-arrow">→</div>
+            <div className={`digest-flow-step ${focus ? 'active' : ''}`}>
+              <div className="digest-flow-count">{focus ? activeSessions.length : digest.sessionCount}</div>
+              <div className="digest-flow-label">{focus ? 'focused sessions' : 'sessions'}</div>
+            </div>
+            <div className="digest-flow-arrow">→</div>
+            <div className={`digest-flow-step ${focus ? 'active' : ''}`}>
+              <div className="digest-flow-count">{focus ? activeMoments.length : digest.keyMoments.length}</div>
+              <div className="digest-flow-label">{focus ? 'focused moments' : 'key moments'}</div>
+            </div>
+            <div className="digest-flow-arrow">→</div>
+            <div className={`digest-flow-step ${focus ? 'active' : ''}`}>
+              <div className="digest-flow-count">{focus ? activeStealLines.length : digest.stealLines.length}</div>
+              <div className="digest-flow-label">{focus ? 'focused lines' : 'reusable lines'}</div>
+            </div>
+          </div>
+        </section>
+
         <section className="digest-card">
-          <div className="digest-section-title">Stats</div>
+          <div className="digest-section-title">Coverage</div>
           <div className="digest-stats">
             <div className="digest-stat">
               <span className="digest-stat-value">{digest.stats.totalRecords}</span>
@@ -876,10 +1030,56 @@ const DigestView = memo(function DigestView({
         </section>
 
         <section className="digest-card">
+          <div className="digest-section-title">Themes</div>
+          <div className="digest-theme-stack">
+            {digest.themes.length > 0 ? digest.themes.map((theme, index) => (
+              <div key={theme} className="digest-theme-line">
+                <span className="digest-theme-index">{String(index + 1).padStart(2, '0')}</span>
+                <span className="digest-theme-text">{theme}</span>
+              </div>
+            )) : <div className="digest-empty">No themes selected for this day.</div>}
+          </div>
+        </section>
+
+        <section className="digest-card">
+          <div className="digest-section-title">Steal Lines</div>
+          <div className="digest-stack">
+            {digest.stealLines.length > 0 ? digest.stealLines.map((line, index) => (
+              <div key={line} className="digest-line-item">
+                <span className="digest-line-index">{index + 1}</span>
+                <span className="digest-line-text">{line}</span>
+              </div>
+            )) : <div className="digest-empty">No reusable lines selected for this day.</div>}
+          </div>
+        </section>
+
+        <section className="digest-card">
           <div className="digest-section-title">Top Patterns</div>
+          {(focusedPattern || focusedMoment || focusedSession) && (
+            <div className="digest-focus-banner">
+              <span className="digest-focus-copy">
+                {focus?.type === 'pattern' && focusedPattern && <>Focusing on <strong>{focusedPattern.title}</strong></>}
+                {focus?.type === 'moment' && focusedMoment && <>Tracing <strong>{focusedMoment.enMain || focusedMoment.intentZh || 'selected moment'}</strong></>}
+                {focus?.type === 'session' && focusedSession && <>Inspecting <strong>Session {digest.sessionDigests.findIndex((session) => session.id === focusedSession.id) + 1}</strong></>}
+              </span>
+              <button
+                type="button"
+                className="digest-focus-clear"
+                onClick={() => setFocus(null)}
+              >
+                Clear
+              </button>
+            </div>
+          )}
           <div className="digest-stack">
             {digest.topPatterns.length > 0 ? digest.topPatterns.map((pattern) => (
-              <div key={pattern.patternKey} className="digest-item">
+              <button
+                key={pattern.patternKey}
+                type="button"
+                className={`digest-item digest-item-button ${patternIsActive(pattern.patternKey) ? 'active' : focus ? 'muted' : ''}`}
+                aria-pressed={patternIsActive(pattern.patternKey)}
+                onClick={() => setFocus((current) => current?.type === 'pattern' && current.id === pattern.patternKey ? null : { type: 'pattern', id: pattern.patternKey })}
+              >
                 <div className="digest-item-header">
                   <strong>{pattern.title}</strong>
                   <span>{pattern.count} hit{pattern.count > 1 ? 's' : ''}</span>
@@ -889,19 +1089,35 @@ const DigestView = memo(function DigestView({
                     {pattern.sampleLines.map((line) => <span key={line} className="digest-inline-pill">{line}</span>)}
                   </div>
                 )}
-              </div>
+              </button>
             )) : <div className="digest-empty">No pattern summaries for this day.</div>}
           </div>
         </section>
 
-        <section className="digest-card">
+        <section className="digest-card digest-card-wide">
           <div className="digest-section-title">Key Moments</div>
           <div className="digest-stack">
-            {digest.keyMoments.length > 0 ? digest.keyMoments.map((moment) => (
-              <div key={moment.recordId} className="digest-item">
+            {digest.keyMoments.length > 0 ? digest.keyMoments.map((moment, index) => (
+              <button
+                key={moment.recordId}
+                type="button"
+                className={[
+                  'digest-moment-row',
+                  'digest-item-button',
+                  momentIsActive(moment.recordId, moment.patternKeys) ? 'active' : focus ? 'muted' : '',
+                ].filter(Boolean).join(' ')}
+                aria-pressed={momentIsActive(moment.recordId, moment.patternKeys)}
+                onClick={() => setFocus((current) => current?.type === 'moment' && current.id === moment.recordId ? null : { type: 'moment', id: moment.recordId })}
+              >
                 <div className="digest-item-header">
                   <strong>{moment.enMain || moment.intentZh || 'Untitled moment'}</strong>
                   <span>{moment.timeBucket}</span>
+                </div>
+                <div className="digest-moment-meta">
+                  <span className="digest-moment-rank">Moment {index + 1}</span>
+                  <span>{new Date(moment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  {moment.sourceApp ? <span>{moment.sourceApp}</span> : null}
+                  <span>score {moment.score}</span>
                 </div>
                 <div className="digest-item-copy">{moment.intentZh || 'No abstracted intent for this moment.'}</div>
                 {moment.patternKeys.length > 0 && (
@@ -909,34 +1125,52 @@ const DigestView = memo(function DigestView({
                     {moment.patternKeys.map((pattern) => <span key={pattern} className="digest-inline-pill subtle">{humanizePatternKey(pattern)}</span>)}
                   </div>
                 )}
-              </div>
+              </button>
             )) : <div className="digest-empty">No key moments selected yet.</div>}
           </div>
         </section>
 
         <section className="digest-card digest-card-wide">
           <div className="digest-section-title">Sessions</div>
-          <div className="digest-stack">
+          <div className="digest-section-intro">These are the chunks the day collapsed into before the final digest was assembled.</div>
+          <div className="digest-timeline">
             {digest.sessionDigests.length > 0 ? digest.sessionDigests.map((session, index) => (
-              <div key={session.id} className="digest-session">
-                <div className="digest-item-header">
-                  <strong>Session {index + 1}</strong>
-                  <span>{session.recordCount} record{session.recordCount > 1 ? 's' : ''}</span>
+              <button
+                key={session.id}
+                type="button"
+                className={[
+                  'digest-session',
+                  'digest-session-timeline',
+                  'digest-item-button',
+                  sessionIsActive(session.id, session.recordIds, session.topPatternKeys) ? 'active' : focus ? 'muted' : '',
+                ].filter(Boolean).join(' ')}
+                aria-pressed={sessionIsActive(session.id, session.recordIds, session.topPatternKeys)}
+                onClick={() => setFocus((current) => current?.type === 'session' && current.id === session.id ? null : { type: 'session', id: session.id })}
+              >
+                <div className="digest-session-rail">
+                  <span className="digest-session-dot" />
+                  {index !== digest.sessionDigests.length - 1 && <span className="digest-session-line" />}
                 </div>
-                <div className="digest-session-range">
-                  {new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {' - '}
-                  {new Date(session.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {session.sourceApps.length > 0 ? ` · ${session.sourceApps.join(', ')}` : ''}
+                <div className="digest-session-body">
+                  <div className="digest-item-header">
+                    <strong>Session {index + 1}</strong>
+                    <span>{session.recordCount} record{session.recordCount > 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="digest-session-range">
+                    {new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {' - '}
+                    {new Date(session.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {session.sourceApps.length > 0 ? ` · ${session.sourceApps.join(', ')}` : ''}
+                  </div>
+                  <div className="digest-inline-list">
+                    {session.themeLabels.map((theme) => <span key={theme} className="story-chip">{theme}</span>)}
+                    {session.topPatternKeys.map((pattern) => <span key={pattern} className="digest-inline-pill subtle">{humanizePatternKey(pattern)}</span>)}
+                  </div>
+                  {session.stealLines.length > 0 && (
+                    <div className="digest-item-copy">{session.stealLines.join(' · ')}</div>
+                  )}
                 </div>
-                <div className="digest-inline-list">
-                  {session.themeLabels.map((theme) => <span key={theme} className="story-chip">{theme}</span>)}
-                  {session.topPatternKeys.map((pattern) => <span key={pattern} className="digest-inline-pill subtle">{humanizePatternKey(pattern)}</span>)}
-                </div>
-                {session.stealLines.length > 0 && (
-                  <div className="digest-item-copy">{session.stealLines.join(' · ')}</div>
-                )}
-              </div>
+              </button>
             )) : <div className="digest-empty">No sessions available for this day.</div>}
           </div>
         </section>
