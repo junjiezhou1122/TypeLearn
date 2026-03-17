@@ -834,7 +834,11 @@ const DigestView = memo(function DigestView({
   onDayChange: (day: string) => void;
 }) {
   const [focus, setFocus] = useState<DigestFocus | null>(null);
-  const displayDate = new Date(`${selectedDay}T00:00:00`).toLocaleDateString();
+  const displayDate = parseDayKey(selectedDay).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
   const compressionRate = digest
     ? Math.max(0, Math.round((1 - (digest.keyMoments.length / Math.max(digest.sourceRecordIds.length, 1))) * 100))
     : 0;
@@ -952,7 +956,7 @@ const DigestView = memo(function DigestView({
       />
       <div className="digest-grid fade-in">
         <section className="digest-card digest-card-hero">
-          <div className="digest-kicker">Compressed day summary</div>
+          <div className="digest-kicker">Daily Compression Report</div>
           <h1>{displayDate}</h1>
           <div className="digest-hero-bar" />
           <p className="digest-lead">
