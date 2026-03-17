@@ -107,12 +107,15 @@ export default function App() {
   const [digest, setDigest] = useState<DayDigest | null>(null);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const todayKey = formatDayKey(new Date());
   const [selectedDay, setSelectedDay] = useState<string>(todayKey);
-  const activeDay = selectedDay;
+  const activeDay = selectedDay === 'all' ? todayKey : selectedDay;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setSyncError(null);
     try {
       const storyUrl = new URL(`${API_BASE}/stories`);
       storyUrl.searchParams.set('day', activeDay);
@@ -121,20 +124,26 @@ export default function App() {
       const digestUrl = new URL(`${API_BASE}/digests`);
       digestUrl.searchParams.set('day', activeDay);
 
-      const [artRes, storyRes, choiceRes, dailyRes, digestRes, setRes] = await Promise.all([
+      const [artRes, storyRes, choiceRes, dailyRes, digestRes, setRes, healthRes] = await Promise.all([
         fetch(`${API_BASE}/artifacts`),
         fetch(storyUrl),
         fetch(`${API_BASE}/choices`),
         fetch(dailyUrl),
         fetch(digestUrl),
-        fetch(`${API_BASE}/settings`)
+        fetch(`${API_BASE}/settings`),
+        fetch(`${API_BASE}/health`),
       ]);
+
+      if (!artRes.ok || !setRes.ok || !healthRes.ok) {
+        throw new Error(`Sync failed (status: artifacts=${artRes.status}, settings=${setRes.status}, health=${healthRes.status})`);
+      }
 
       const arts = ((await artRes.json()).items || []) as LearningArtifact[];
       setArtifacts(
         arts.map((a) => ({
           ...a,
-          type: a.intentZh || a.restoredText || /[\u4e00-\u9fff]/.test(a.sourceText) ? 'Expression' : 'Refinement',
+          type: a.sourceLanguage === 'english' ? 'Refinement' : 'Expression',
+          sourceLanguage: a.sourceLanguage ?? (/[^\x00-\x7F]/.test(a.sourceText) ? 'mixed' : 'unknown'),
         }))
       );
 
@@ -143,7 +152,17 @@ export default function App() {
       setDaily((await dailyRes.json()).item || null);
       setDigest((await digestRes.json()).item || null);
       setSettings(await setRes.json());
+
+      const health = (await healthRes.json()) as { providerModes?: unknown };
+      if (!health?.providerModes) {
+        // Defensive: don't fail sync, but surface as a soft error.
+        setSyncError('Service health check returned an unexpected payload.');
+      }
+
+      setLastSyncAt(Date.now());
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSyncError(message);
       console.error(error);
     } finally {
       setLoading(false);
@@ -167,31 +186,46 @@ export default function App() {
   const filteredArtifacts = useMemo(() => (
     artifacts.filter((a) => {
       if (filter === 'all') return true;
-      if (filter === 'english') return a.type === 'Refinement';
-      if (filter === 'chinese') return a.type === 'Expression';
+      if (filter === 'english') return a.sourceLanguage === 'english';
+      if (filter === 'chinese') return a.sourceLanguage !== 'english';
       return true;
     })
   ), [artifacts, filter]);
 
   const inboxArtifacts = useMemo(() => {
+    if (selectedDay === 'all') return filteredArtifacts;
     return filteredArtifacts.filter((artifact) => (
       formatDayKey(new Date(artifact.createdAt)) === selectedDay
     ));
   }, [filteredArtifacts, selectedDay]);
 
   const dayOptions = useMemo<DayOption[]>(
-    () => groupByDay(filteredArtifacts).map((group) => ({
-      day: group.day,
-      label: group.label,
-      count: group.items.length,
-    })),
+    () => {
+      const groups = groupByDay(filteredArtifacts);
+      const allCount = filteredArtifacts.length;
+      return [
+        { day: 'all', label: 'All', count: allCount },
+        ...groups.map((group) => ({
+          day: group.day,
+          label: group.label,
+          count: group.items.length,
+        })),
+      ];
+    },
     [filteredArtifacts]
+  );
+
+  const dayOptionsOnlyDays = useMemo(
+    () => dayOptions.filter((option) => option.day !== 'all'),
+    [dayOptions]
   );
 
   const handleDayChange = useCallback((day: string) => {
     const next = day.trim();
     setSelectedDay(next || todayKey);
   }, [todayKey]);
+
+  const allGroups = useMemo(() => groupByDay(filteredArtifacts), [filteredArtifacts]);
 
   return (
     <div className="app-container">
@@ -214,7 +248,7 @@ export default function App() {
           )}
           <button onClick={fetchData} className="nav-item" style={{ fontSize: '12px', color: '#999' }}>
             <RefreshCcw size={13} className={loading ? 'spinning' : ''} />
-            <span>Sync</span>
+            <span>{syncError ? 'Sync (offline)' : 'Sync'}</span>
           </button>
         </div>
       </aside>
@@ -222,11 +256,16 @@ export default function App() {
       <main className="main-content">
         <TopBar
           view={view}
+          loading={loading}
+          lastSyncAt={lastSyncAt}
+          syncError={syncError}
+          onSync={fetchData}
         />
         <div className="content-inner">
           {view === 'inbox' && (
             <InboxView
-              artifacts={inboxArtifacts}
+              artifacts={selectedDay === 'all' ? undefined : inboxArtifacts}
+              groups={selectedDay === 'all' ? allGroups : undefined}
               dayOptions={dayOptions}
               currentFilter={filter}
               onFilterChange={setFilter}
@@ -240,8 +279,8 @@ export default function App() {
           {view === 'digest' && (
             <DigestView
               digest={digest}
-              selectedDay={selectedDay}
-              dayOptions={dayOptions}
+              selectedDay={activeDay}
+              dayOptions={dayOptionsOnlyDays}
               onDayChange={handleDayChange}
             />
           )}
@@ -276,14 +315,34 @@ function NavItem({
 
 function TopBar({
   view,
+  loading,
+  lastSyncAt,
+  syncError,
+  onSync,
 }: {
   view: ViewType;
+  loading: boolean;
+  lastSyncAt: number | null;
+  syncError: string | null;
+  onSync: () => void;
 }) {
   const titles = { inbox: 'Inbox', choices: 'Review', lesson: 'Lesson', story: 'Story', digest: 'Digest', settings: 'Settings' };
+  const syncLabel = syncError
+    ? 'Service unreachable'
+    : lastSyncAt
+      ? `Synced ${new Date(lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+      : 'Not synced yet';
+
   return (
     <div className="top-bar">
       <div className="top-bar-left">
         <div className="view-title">{titles[view]}</div>
+      </div>
+      <div className="top-bar-right">
+        <button className={`sync-pill ${syncError ? 'error' : ''}`} type="button" onClick={onSync}>
+          <RefreshCcw size={13} className={loading ? 'spinning' : ''} />
+          <span>{syncLabel}</span>
+        </button>
       </div>
     </div>
   );
@@ -303,9 +362,11 @@ const InboxHeaderControls = memo(function InboxHeaderControls({
   onDayChange: (day: string) => void;
 }) {
   const selectedOption = dayOptions.find((option) => option.day === selectedDay) ?? null;
+  const isAll = selectedDay === 'all';
 
   const stepDay = (direction: 'left' | 'right') => {
     if (dayOptions.length === 0) return;
+    if (isAll) return;
     const currentIndex = dayOptions.findIndex((option) => option.day === selectedDay);
     if (currentIndex === -1) return;
     const delta = direction === 'left' ? -1 : 1;
@@ -323,7 +384,7 @@ const InboxHeaderControls = memo(function InboxHeaderControls({
       </div>
 
       <div className="inbox-time-inline">
-        <span className="time-current-label">{selectedOption?.label ?? 'Today'}</span>
+        <span className="time-current-label">{selectedOption?.label ?? (isAll ? 'All' : 'Today')}</span>
 
         <div className="day-stepper">
           <button
@@ -331,7 +392,7 @@ const InboxHeaderControls = memo(function InboxHeaderControls({
             type="button"
             aria-label="Previous day"
             onClick={() => stepDay('left')}
-            disabled={!selectedOption}
+            disabled={!selectedOption || isAll}
           >
             <ChevronLeft size={14} />
           </button>
@@ -340,15 +401,17 @@ const InboxHeaderControls = memo(function InboxHeaderControls({
             type="button"
             aria-label="Next day"
             onClick={() => stepDay('right')}
-            disabled={!selectedOption}
+            disabled={!selectedOption || isAll}
           >
             <ChevronRight size={14} />
           </button>
         </div>
 
-        <div className="day-scroller-date">
-          <DatePopover day={selectedDay} onDayChange={onDayChange} />
-        </div>
+        {!isAll && (
+          <div className="day-scroller-date">
+            <DatePopover day={selectedDay} onDayChange={onDayChange} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -420,6 +483,7 @@ const DigestHeaderControls = memo(function DigestHeaderControls({
 
 const InboxView = memo(function InboxView({
   artifacts,
+  groups,
   dayOptions,
   currentFilter,
   onFilterChange,
@@ -427,6 +491,7 @@ const InboxView = memo(function InboxView({
   onDayChange,
 }: {
   artifacts?: LearningArtifact[];
+  groups?: DayGroup[];
   dayOptions?: DayOption[];
   currentFilter: FilterType;
   onFilterChange: (f: FilterType) => void;
@@ -436,15 +501,36 @@ const InboxView = memo(function InboxView({
   const showDayScroller = Boolean(dayOptions && onDayChange);
   const todayKey = formatDayKey(new Date());
   const hasToday = dayOptions?.some((option) => option.day === todayKey) ?? false;
-  const effectiveSelectedDay = selectedDay ?? (hasToday ? todayKey : todayKey);
+  const effectiveSelectedDay = selectedDay ?? (hasToday ? todayKey : 'all');
 
-  const grid = !artifacts || artifacts.length === 0 ? (
+  const grid = (!artifacts || artifacts.length === 0) && (!groups || groups.length === 0) ? (
     <div className="empty-state">
       <p>No items yet.</p>
     </div>
+  ) : groups ? (
+    <div className="inbox-groups">
+      {groups.map((group) => (
+        <section key={group.day} className="day-group">
+          <header className="day-header">
+            <div>
+              <div className="day-title">{group.label}</div>
+              <div className="day-count">{group.items.length} item{group.items.length > 1 ? 's' : ''}</div>
+            </div>
+            <button className="nav-item" style={{ width: 'auto', fontSize: 12, color: '#999' }} onClick={() => onDayChange?.(group.day)}>
+              Open
+            </button>
+          </header>
+          <div className="content-grid">
+            {group.items.map((artifact) => (
+              <ArtifactCard key={artifact.id} artifact={artifact} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
   ) : (
     <div className="content-grid">
-      {artifacts.map((artifact) => (
+      {(artifacts ?? []).map((artifact) => (
         <ArtifactCard key={artifact.id} artifact={artifact} />
       ))}
     </div>
@@ -793,7 +879,7 @@ function LessonView({ daily }: { daily: DailyLesson | null }) {
 
         {daily.groups.map((g) => (
           <div key={g.macroCategory} style={{ marginTop: 18 }}>
-            <h2 style={{ marginBottom: 10, fontSize: 14, color: '#ddd' }}>{g.macroCategory}</h2>
+            <h2 style={{ marginBottom: 10, fontSize: 14, color: 'var(--text-secondary)' }}>{g.macroCategory}</h2>
             <div style={{ display: 'grid', gap: 10 }}>
               {g.patterns.map((p) => (
                 <div key={p.patternKey} className="artifact-card" style={{ padding: 14 }}>
@@ -811,7 +897,7 @@ function LessonView({ daily }: { daily: DailyLesson | null }) {
 
         {daily.stealLines.length > 0 && (
           <div style={{ marginTop: 22 }}>
-            <h2 style={{ marginBottom: 10, fontSize: 14, color: '#ddd' }}>Steal these lines</h2>
+            <h2 style={{ marginBottom: 10, fontSize: 14, color: 'var(--text-secondary)' }}>Steal these lines</h2>
             <ul>
               {daily.stealLines.map((l, i) => <li key={i}>{l}</li>)}
             </ul>

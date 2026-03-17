@@ -13,6 +13,9 @@ export interface LearningArtifact {
   sourceText: string;
   restoredText?: string | null;
 
+  // Optional: helps UIs categorize artifacts without heuristics.
+  sourceLanguage?: 'chinese' | 'english' | 'mixed' | 'unknown';
+
   // Backward-compatible string fields (existing UIs).
   suggestion: string;
   explanation: string;

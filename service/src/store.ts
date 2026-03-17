@@ -418,6 +418,7 @@ export class LearningStore {
         id: record.id,
         sourceText: record.sourceText,
         restoredText: record.restoredText ?? null,
+        sourceLanguage: record.sourceLanguage,
         suggestion: record.status === 'failed' ? 'Waiting for network…' : 'Processing…',
         explanation:
           record.status === 'failed'
@@ -443,6 +444,7 @@ export class LearningStore {
       id: record.id,
       sourceText: record.sourceText,
       restoredText: record.restoredText ?? null,
+      sourceLanguage: record.sourceLanguage,
       createdAt: record.createdAt,
       status: record.status,
       corrected: record.corrected,

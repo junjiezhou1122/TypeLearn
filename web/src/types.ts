@@ -25,6 +25,9 @@ export interface LearningArtifact {
 
   createdAt: string;
   status: 'pending' | 'processing' | 'done' | 'failed' | 'filtered';
+
+  // Optional: provided by service to avoid UI heuristics.
+  sourceLanguage?: 'chinese' | 'english' | 'mixed' | 'unknown';
   isSaved?: boolean;
 }
 
