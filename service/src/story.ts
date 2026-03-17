@@ -1,26 +1,13 @@
-import type { CaptureRecord, ProviderSettings, StoryArtifact } from '../../shared/src/index';
+import type { DayDigest, ProviderSettings, StoryArtifact } from '../../shared/src/index';
 
-export async function generateDailyStory(records: CaptureRecord[], settings: ProviderSettings): Promise<StoryArtifact> {
-  const todayRecords = records.filter((record) => isToday(record.createdAt) && record.status === 'done');
+export async function generateStoryFromDigest(
+  digest: DayDigest,
+  settings: ProviderSettings,
+): Promise<StoryArtifact> {
+  const fallbackStory = buildFallbackStory(digest);
 
-  const intents = todayRecords
-    .map((r) => r.intentZh)
-    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
-
-  const stealLines = todayRecords
-    .flatMap((r) => r.enTemplates ?? [])
-    .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
-    .slice(0, 16);
-
-  const fallbackStory = buildFallbackStory(todayRecords, stealLines);
-
-  if (!settings.baseUrl || !settings.model) {
-    return createStoryArtifact(todayRecords, fallbackStory);
-  }
-
-  // If we have no safe material, prefer fallback.
-  if (intents.length === 0 && stealLines.length === 0) {
-    return createStoryArtifact(todayRecords, fallbackStory);
+  if (!settings.baseUrl || !settings.model || digest.stats.totalDoneRecords === 0) {
+    return createStoryArtifact(digest, fallbackStory);
   }
 
   try {
@@ -37,23 +24,48 @@ export async function generateDailyStory(records: CaptureRecord[], settings: Pro
           {
             role: 'system',
             content: [
-              'Write an abstract, story-safe daily story in simple English.',
-              'Inputs are intents/themes (Chinese summaries) and reusable English templates.',
+              'Write a story-safe daily learning recap in simple English.',
+              'You receive a compact day digest, not raw user text.',
               '',
               'Rules:',
               '- Do NOT include private details (names, places, companies, emails, numbers, IDs).',
-              '- Keep it coherent, warm, and general. No real-world specifics.',
-              '- Include a final section titled "Steal these lines" with 5–10 bullet points.',
-              '- Each bullet point must be a reusable English line (can reuse templates).',
+              '- Keep the tone warm, calm, and general.',
+              '- Focus on learning themes, repeated patterns, and reusable English.',
+              '- Return JSON only.',
               '',
-              'Return only the story text (multi-paragraph is ok).',
+              'JSON shape:',
+              '{',
+              '  "title": string,',
+              '  "summary": string,',
+              '  "paragraphs": string[],',
+              '  "stealLines": string[]',
+              '}',
+              '',
+              'Constraints:',
+              '- title under 60 chars',
+              '- summary 1 sentence',
+              '- 2 to 4 paragraphs',
+              '- 5 to 8 steal lines',
             ].join('\n'),
           },
           {
             role: 'user',
             content: JSON.stringify({
-              intents,
-              templates: stealLines,
+              day: digest.day,
+              sessionCount: digest.sessionCount,
+              themes: digest.themes,
+              topPatterns: digest.topPatterns.map((pattern) => ({
+                title: pattern.title,
+                count: pattern.count,
+                sampleLines: pattern.sampleLines,
+              })),
+              keyMoments: digest.keyMoments.map((moment) => ({
+                timeBucket: moment.timeBucket,
+                intentZh: moment.intentZh,
+                enMain: moment.enMain,
+                patternKeys: moment.patternKeys,
+              })),
+              stealLines: digest.stealLines,
             }),
           },
         ],
@@ -67,12 +79,113 @@ export async function generateDailyStory(records: CaptureRecord[], settings: Pro
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
+    const content = payload.choices?.[0]?.message?.content?.trim() ?? '';
+    const parsed = parseStoryPayload(content);
 
-    const story = payload.choices?.[0]?.message?.content?.trim() || fallbackStory;
-    return createStoryArtifact(todayRecords, story);
+    if (!parsed) {
+      return createStoryArtifact(digest, fallbackStory);
+    }
+
+    const story = sanitizeStoryContent(parsed, digest, fallbackStory);
+    return createStoryArtifact(digest, story);
   } catch {
-    return createStoryArtifact(todayRecords, fallbackStory);
+    return createStoryArtifact(digest, fallbackStory);
   }
+}
+
+export function buildFallbackStory(digest: DayDigest): StoryContent {
+  if (digest.stats.totalDoneRecords === 0) {
+    return {
+      title: digest.day === isoDay(new Date().toISOString()) ? "Today's Story" : `Story for ${digest.day}`,
+      summary: 'No captured content for this day yet.',
+      paragraphs: ['Start typing to build a daily learning story from your strongest moments.'],
+      stealLines: [],
+    };
+  }
+
+  const themeText = joinList(digest.themes.slice(0, 3)) || 'a few clear intentions';
+  const patternText = joinList(digest.topPatterns.slice(0, 2).map((pattern) => pattern.title)) || 'small language upgrades';
+  const momentLines = digest.keyMoments
+    .map((moment) => moment.enMain)
+    .filter((value): value is string => Boolean(value))
+    .slice(0, 3);
+
+  const paragraphs = [
+    `The day moved through ${themeText}, with the learner returning to ${patternText}.`,
+    digest.sessionDigests.length > 1
+      ? `These moments arrived across ${digest.sessionDigests.length} focused sessions, which kept the learning loop active without turning the day into a full transcript.`
+      : 'The learning stayed focused in one compact session, making the strongest patterns easier to notice.',
+    momentLines.length > 0
+      ? `Some reusable lines stood out: ${joinList(momentLines)}.`
+      : 'A few reusable English lines emerged from the day and are ready for the next conversation.',
+  ].filter(Boolean);
+
+  return {
+    title: digest.day === isoDay(new Date().toISOString()) ? "Today's Story" : `Story for ${digest.day}`,
+    summary: `A focused learning day shaped by ${themeText}.`,
+    paragraphs,
+    stealLines: digest.stealLines.slice(0, 8),
+  };
+}
+
+function createStoryArtifact(digest: DayDigest, content: StoryContent): StoryArtifact {
+  return {
+    id: crypto.randomUUID(),
+    day: digest.day,
+    title: content.title,
+    summary: content.summary,
+    paragraphs: content.paragraphs,
+    stealLines: content.stealLines,
+    themeLabels: digest.themes,
+    patternKeys: digest.topPatterns.map((pattern) => pattern.patternKey),
+    sessionCount: digest.sessionCount,
+    story: composeLegacyStory(content),
+    createdAt: new Date().toISOString(),
+    sourceRecordIds: digest.sourceRecordIds,
+  };
+}
+
+function sanitizeStoryContent(
+  parsed: Partial<StoryContent>,
+  digest: DayDigest,
+  fallback: StoryContent,
+): StoryContent {
+  const paragraphs = (parsed.paragraphs ?? [])
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const stealLines = (parsed.stealLines ?? [])
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  return {
+    title: parsed.title?.trim() || fallback.title,
+    summary: parsed.summary?.trim() || fallback.summary,
+    paragraphs: paragraphs.length > 0 ? paragraphs : fallback.paragraphs,
+    stealLines: stealLines.length > 0 ? unique(stealLines) : fallback.stealLines,
+  };
+}
+
+function parseStoryPayload(content: string): Partial<StoryContent> | null {
+  if (!content) return null;
+
+  const match = content.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+
+  try {
+    return JSON.parse(match[0]) as Partial<StoryContent>;
+  } catch {
+    return null;
+  }
+}
+
+function composeLegacyStory(content: StoryContent): string {
+  const body = [content.summary, ...content.paragraphs.filter((line) => line.trim() && line.trim() !== content.summary.trim())]
+    .join('\n\n')
+    .trim();
+  if (content.stealLines.length === 0) return body;
+  return `${body}\n\nSteal these lines\n${content.stealLines.map((line) => `- ${line}`).join('\n')}`.trim();
 }
 
 function resolveChatCompletionsUrl(baseUrl: string): URL {
@@ -87,37 +200,24 @@ function resolveChatCompletionsUrl(baseUrl: string): URL {
   return new URL('v1/chat/completions', url);
 }
 
-function createStoryArtifact(records: CaptureRecord[], story: string): StoryArtifact {
-  return {
-    id: crypto.randomUUID(),
-    title: "Today's Story",
-    story,
-    createdAt: new Date().toISOString(),
-    sourceRecordIds: records.map((record) => record.id),
-  };
+function joinList(items: string[]): string {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
-function buildFallbackStory(records: CaptureRecord[], templates: string[]): string {
-  if (records.length === 0) {
-    return 'No captured content for today yet. Start typing to build today\'s story.';
-  }
-
-  const opening = 'Today, a learner moved through the day with a few clear intentions.';
-  const body = records
-    .slice(0, 5)
-    .map((record) => record.englishText)
-    .filter(Boolean)
-    .join(' ');
-
-  const steal = templates.slice(0, 8);
-  const stealSection = steal.length
-    ? `\n\nSteal these lines\n${steal.map((t) => `- ${t}`).join('\n')}`
-    : '';
-
-  return `${opening} ${body}`.trim() + stealSection;
+function unique(items: string[]): string[] {
+  return Array.from(new Set(items));
 }
 
-function isToday(timestamp: string): boolean {
-  const today = new Date().toISOString().slice(0, 10);
-  return timestamp.slice(0, 10) === today;
+function isoDay(iso: string): string {
+  return iso.slice(0, 10);
 }
+
+type StoryContent = {
+  title: string;
+  summary: string;
+  paragraphs: string[];
+  stealLines: string[];
+};

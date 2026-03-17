@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LearningStore, pickAutoChoiceCandidateForSeamlessLearning } from '../src/store.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 test('adds artifacts to the front of the review history', () => {
   const store = new LearningStore();
@@ -14,7 +17,14 @@ test('adds artifacts to the front of the review history', () => {
   assert.equal(items[1]?.sourceText, 'I has a question.');
 });
 
-test('exposes capture records in newest-first order for persisted history', async () => {
+test('exposes capture records in newest-first order for persisted history', async (t) => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'typelearn-store-'));
+  process.env.TYPELEARN_STATE_FILE = join(tempDir, 'state.json');
+  t.after(async () => {
+    delete process.env.TYPELEARN_STATE_FILE;
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
   const store = new LearningStore();
   await store.init();
   await store.updateSettings({ baseUrl: '', apiKey: '', model: 'gpt-4.1-mini' });

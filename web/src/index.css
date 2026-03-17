@@ -803,6 +803,7 @@ input:focus {
 
 /* --- STORY (glass) --- */
 .story-page { max-width: 640px; margin: 0 auto; padding: 2rem 0; }
+.digest-page { display: flex; flex-direction: column; gap: 18px; }
 
 .story-empty {
   text-align: center;
@@ -839,6 +840,40 @@ input:focus {
   color: var(--text-tertiary);
 }
 
+.story-summary {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.story-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.story-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.1);
+  color: var(--purple);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(139, 92, 246, 0.12);
+}
+
+.story-chip.subtle {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--refine-color-dark);
+  border-color: rgba(99, 102, 241, 0.12);
+}
+
 .story-lines h2 {
   font-size: 14px;
   margin-bottom: 8px;
@@ -872,6 +907,158 @@ input:focus {
   font-size: 15px;
   line-height: 1.75;
   color: var(--text-primary);
+}
+
+.digest-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.digest-card {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+  border: 1px solid var(--glass-border);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.digest-card-hero,
+.digest-card-wide {
+  grid-column: 1 / -1;
+}
+
+.digest-kicker {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.digest-card h1 {
+  font-size: 1.8rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.digest-lead {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.digest-chip-row,
+.digest-inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.digest-section-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.digest-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.digest-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.digest-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+}
+
+.digest-stat-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.digest-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.digest-item,
+.digest-session {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.58);
+}
+
+.digest-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.digest-item-header strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.digest-inline-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
+}
+
+.digest-inline-pill.subtle {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.12);
+  color: var(--refine-color-dark);
+}
+
+.digest-item-copy,
+.digest-session-range,
+.digest-empty {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .digest-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .digest-stats {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* --- SCROLLBAR (glass-matching) --- */

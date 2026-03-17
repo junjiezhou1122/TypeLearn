@@ -89,13 +89,69 @@ export interface DailyLesson {
   stealLines: string[];
 }
 
+export type TimeBucket = 'morning' | 'afternoon' | 'evening' | 'night';
+
+export interface StoryMoment {
+  recordId: string;
+  createdAt: string;
+  timeBucket: TimeBucket;
+  sourceApp: string | null;
+  intentZh?: string;
+  enMain?: string;
+  patternKeys: string[];
+  score: number;
+}
+
+export interface StoryPatternSummary {
+  patternKey: string;
+  title: string;
+  count: number;
+  sampleLines: string[];
+}
+
+export interface SessionDigest {
+  id: string;
+  startedAt: string;
+  endedAt: string;
+  sourceApps: string[];
+  themeLabels: string[];
+  topPatternKeys: string[];
+  stealLines: string[];
+  moments: StoryMoment[];
+  recordIds: string[];
+  recordCount: number;
+}
+
+export interface DayDigest {
+  day: string;
+  createdAt: string;
+  sessionCount: number;
+  themes: string[];
+  topPatterns: StoryPatternSummary[];
+  stealLines: string[];
+  keyMoments: StoryMoment[];
+  sessionDigests: SessionDigest[];
+  sourceRecordIds: string[];
+  stats: {
+    totalRecords: number;
+    totalDoneRecords: number;
+    totalPatterns: number;
+  };
+}
+
 export interface StoryArtifact {
   id: string;
+  day: string;
   title: string;
+  summary: string;
+  paragraphs: string[];
+  stealLines: string[];
+  themeLabels: string[];
+  patternKeys: string[];
+  sessionCount: number;
   story: string;
   createdAt: string;
   sourceRecordIds: string[];
-  highlightedPhrases?: string[];
 }
 
 export interface ProviderSettings {

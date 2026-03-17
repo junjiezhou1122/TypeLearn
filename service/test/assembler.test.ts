@@ -1,11 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { LearningStore } from '../src/store.js';
 
 // This test focuses on the watermark behavior: fragments should not immediately
 // become committed records; they should stay as draft until older than L=20s.
 
-test('stream assembler delays commit by watermark (L=20s)', async () => {
+test('stream assembler delays commit by watermark (L=20s)', async (t) => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'typelearn-assembler-'));
+  process.env.TYPELEARN_STATE_FILE = join(tempDir, 'state.json');
+  t.after(async () => {
+    delete process.env.TYPELEARN_STATE_FILE;
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
   const store = new LearningStore();
   await store.init();
 

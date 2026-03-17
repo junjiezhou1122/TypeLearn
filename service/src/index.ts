@@ -25,6 +25,8 @@ const server = createServer((request, response) => {
     return;
   }
 
+  const requestUrl = new URL(request.url, `http://${host}:${port}`);
+
   if (request.method === 'GET' && request.url === '/health') {
     const payload: HealthStatus = {
       status: 'ok',
@@ -36,48 +38,55 @@ const server = createServer((request, response) => {
     return;
   }
 
-  if (request.method === 'GET' && request.url === '/artifacts') {
+  if (request.method === 'GET' && requestUrl.pathname === '/artifacts') {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ items: store.list() }));
     return;
   }
 
-  if (request.method === 'GET' && request.url === '/records') {
+  if (request.method === 'GET' && requestUrl.pathname === '/records') {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ items: store.listRecords() }));
     return;
   }
 
-  if (request.method === 'GET' && request.url === '/stories') {
+  if (request.method === 'GET' && requestUrl.pathname === '/stories') {
+    const day = requestUrl.searchParams.get('day');
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ items: store.listStories() }));
+    response.end(JSON.stringify({ items: day ? store.listStoriesForDay(day) : store.listStories() }));
     return;
   }
 
-  if (request.method === 'GET' && request.url === '/settings') {
+  if (request.method === 'GET' && requestUrl.pathname === '/settings') {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify(store.getSettings()));
     return;
   }
 
-  if (request.method === 'GET' && request.url === '/choices') {
+  if (request.method === 'GET' && requestUrl.pathname === '/choices') {
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ items: store.listChoices() }));
     return;
   }
 
-  if (request.method === 'GET' && request.url.startsWith('/patterns')) {
-    const params = new URL(request.url, `http://${host}:${port}`).searchParams;
-    const day = params.get('day') ?? new Date().toISOString().slice(0, 10);
+  if (request.method === 'GET' && requestUrl.pathname === '/patterns') {
+    const day = requestUrl.searchParams.get('day') ?? new Date().toISOString().slice(0, 10);
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ items: store.getPatterns(day) }));
     return;
   }
 
-  if (request.method === 'GET' && request.url === '/daily') {
-    const day = new Date().toISOString().slice(0, 10);
+  if (request.method === 'GET' && requestUrl.pathname === '/daily') {
+    const day = requestUrl.searchParams.get('day') ?? new Date().toISOString().slice(0, 10);
     response.writeHead(200, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ item: store.getDailyLesson(day) }));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/digests') {
+    const day = requestUrl.searchParams.get('day') ?? new Date().toISOString().slice(0, 10);
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ item: store.getDayDigest(day) }));
     return;
   }
 
@@ -171,19 +180,26 @@ const server = createServer((request, response) => {
     return;
   }
 
-  if (request.method === 'POST' && request.url === '/stories/generate') {
-    void (async () => {
-      try {
-        const story = await store.generateStory();
-        response.writeHead(201, { 'content-type': 'application/json' });
-        response.end(JSON.stringify({ item: story }));
-      } catch {
-        if (!response.headersSent) {
-          response.writeHead(500, { 'content-type': 'application/json' });
-          response.end(JSON.stringify({ error: 'internal server error' }));
+  if (request.method === 'POST' && requestUrl.pathname === '/stories/generate') {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('end', () => {
+      void (async () => {
+        try {
+          const raw = Buffer.concat(chunks).toString('utf8').trim();
+          const body = raw ? JSON.parse(raw) as { day?: string } : {};
+          const day = body.day ?? requestUrl.searchParams.get('day') ?? new Date().toISOString().slice(0, 10);
+          const story = await store.generateStory(day);
+          response.writeHead(201, { 'content-type': 'application/json' });
+          response.end(JSON.stringify({ item: story }));
+        } catch {
+          if (!response.headersSent) {
+            response.writeHead(500, { 'content-type': 'application/json' });
+            response.end(JSON.stringify({ error: 'internal server error' }));
+          }
         }
-      }
-    })();
+      })();
+    });
     return;
   }
 

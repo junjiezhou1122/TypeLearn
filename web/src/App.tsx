@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from '
 import {
   Inbox,
   Book,
+  Braces,
   Settings,
   RefreshCcw,
   MessageCircle,
@@ -16,11 +17,12 @@ import type {
   ProviderSettings,
   ChoiceItem,
   DailyLesson,
+  DayDigest,
 } from './types';
 
 const API_BASE = 'http://localhost:43010';
 
-type ViewType = 'inbox' | 'story' | 'choices' | 'lesson' | 'settings';
+type ViewType = 'inbox' | 'story' | 'digest' | 'choices' | 'lesson' | 'settings';
 type FilterType = 'all' | 'english' | 'chinese';
 
 type DayGroup = {
@@ -67,6 +69,12 @@ const getDayLabel = (dayKey: string): string => {
   });
 };
 
+const humanizePatternKey = (patternKey: string): string => {
+  const parts = patternKey.split(':');
+  const raw = parts.length > 1 ? parts[1] : parts[0];
+  return raw.replace(/[_-]+/g, ' ').trim();
+};
+
 const groupByDay = (artifacts: LearningArtifact[]): DayGroup[] => {
   const grouped = new Map<string, LearningArtifact[]>();
   artifacts.forEach((artifact) => {
@@ -84,31 +92,6 @@ const groupByDay = (artifacts: LearningArtifact[]): DayGroup[] => {
     .map(([day, items]) => ({ day, label: getDayLabel(day), items }));
 };
 
-const splitStorySections = (storyText: string): { body: string; stealLines: string[] } => {
-  if (!storyText) return { body: '', stealLines: [] };
-  const marker = 'steal these lines';
-  const lower = storyText.toLowerCase();
-  const idx = lower.indexOf(marker);
-  if (idx === -1) return { body: storyText.trim(), stealLines: [] };
-
-  const before = storyText.slice(0, idx).trim();
-  const after = storyText.slice(idx + marker.length).trim();
-  const lines = after.split('\n').map((line) => line.trim()).filter(Boolean);
-  const stealLines = lines
-    .filter((line) => /^[-•*]/.test(line) || /^\d+\./.test(line))
-    .map((line) => line.replace(/^[-•*]\s*/, '').replace(/^\d+\.\s*/, '').trim())
-    .filter(Boolean);
-
-  if (stealLines.length === 0) {
-    const fallbackLines = lines
-      .map((line) => line.replace(/^[-•*]\s*/, '').replace(/^\d+\.\s*/, '').trim())
-      .filter(Boolean);
-    return { body: before, stealLines: fallbackLines };
-  }
-
-  return { body: before, stealLines };
-};
-
 export default function App() {
   const [view, setView] = useState<ViewType>('inbox');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -116,19 +99,29 @@ export default function App() {
   const [stories, setStories] = useState<StoryArtifact[]>([]);
   const [choices, setChoices] = useState<ChoiceItem[]>([]);
   const [daily, setDaily] = useState<DailyLesson | null>(null);
+  const [digest, setDigest] = useState<DayDigest | null>(null);
   const [settings, setSettings] = useState<ProviderSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const todayKey = formatDayKey(new Date());
   const [selectedDay, setSelectedDay] = useState<string>(todayKey);
+  const activeDay = selectedDay;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [artRes, storyRes, choiceRes, dailyRes, setRes] = await Promise.all([
+      const storyUrl = new URL(`${API_BASE}/stories`);
+      storyUrl.searchParams.set('day', activeDay);
+      const dailyUrl = new URL(`${API_BASE}/daily`);
+      dailyUrl.searchParams.set('day', activeDay);
+      const digestUrl = new URL(`${API_BASE}/digests`);
+      digestUrl.searchParams.set('day', activeDay);
+
+      const [artRes, storyRes, choiceRes, dailyRes, digestRes, setRes] = await Promise.all([
         fetch(`${API_BASE}/artifacts`),
-        fetch(`${API_BASE}/stories`),
+        fetch(storyUrl),
         fetch(`${API_BASE}/choices`),
-        fetch(`${API_BASE}/daily`),
+        fetch(dailyUrl),
+        fetch(digestUrl),
         fetch(`${API_BASE}/settings`)
       ]);
 
@@ -143,23 +136,28 @@ export default function App() {
       setStories((await storyRes.json()).items || []);
       setChoices((await choiceRes.json()).items || []);
       setDaily((await dailyRes.json()).item || null);
+      setDigest((await digestRes.json()).item || null);
       setSettings(await setRes.json());
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeDay]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const generateStory = useCallback(async () => {
     try {
-      await fetch(`${API_BASE}/stories/generate`, { method: 'POST' });
+      await fetch(`${API_BASE}/stories/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ day: activeDay }),
+      });
     } finally {
       await fetchData();
     }
-  }, [fetchData]);
+  }, [activeDay, fetchData]);
 
   const filteredArtifacts = useMemo(() => (
     artifacts.filter((a) => {
@@ -199,6 +197,7 @@ export default function App() {
           <NavItem active={view === 'choices'} icon={<MessageCircle size={15}/>} label="Review" hint={choices.length ? `${choices.length}` : undefined} onClick={() => setView('choices')} />
           <NavItem active={view === 'lesson'} icon={<Zap size={15}/>} label="Lesson" onClick={() => setView('lesson')} />
           <NavItem active={view === 'story'} icon={<Book size={15}/>} label="Story" onClick={() => setView('story')} />
+          <NavItem active={view === 'digest'} icon={<Braces size={15}/>} label="Digest" onClick={() => setView('digest')} />
           <NavItem active={view === 'settings'} icon={<Settings size={15}/>} label="Settings" onClick={() => setView('settings')} />
         </nav>
         <div style={{ marginTop: 'auto' }}>
@@ -232,7 +231,15 @@ export default function App() {
           )}
           {view === 'choices' && <ChoicesView choices={choices} onResolved={fetchData} />}
           {view === 'lesson' && <LessonView daily={daily} />}
-          {view === 'story' && <StoryView stories={stories} onGenerate={generateStory} />}
+          {view === 'story' && <StoryView stories={stories} selectedDay={activeDay} onGenerate={generateStory} />}
+          {view === 'digest' && (
+            <DigestView
+              digest={digest}
+              selectedDay={selectedDay}
+              dayOptions={dayOptions}
+              onDayChange={handleDayChange}
+            />
+          )}
           {view === 'settings' && settings && <SettingsView settings={settings} onUpdate={setSettings} />}
         </div>
       </main>
@@ -267,7 +274,7 @@ function TopBar({
 }: {
   view: ViewType;
 }) {
-  const titles = { inbox: 'Inbox', choices: 'Review', lesson: 'Lesson', story: 'Story', settings: 'Settings' };
+  const titles = { inbox: 'Inbox', choices: 'Review', lesson: 'Lesson', story: 'Story', digest: 'Digest', settings: 'Settings' };
   return (
     <div className="top-bar">
       <div className="top-bar-left">
@@ -276,6 +283,87 @@ function TopBar({
     </div>
   );
 }
+
+const DayScroller = memo(function DayScroller({
+  dayOptions,
+  selectedDay,
+  onDayChange,
+}: {
+  dayOptions: DayOption[];
+  selectedDay: string;
+  onDayChange: (day: string) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollTrack = (direction: 'left' | 'right') => {
+    if (!trackRef.current) return;
+    const amount = direction === 'left' ? -260 : 260;
+    trackRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+  };
+
+  const stepDay = (direction: 'left' | 'right') => {
+    if (dayOptions.length === 0) return;
+    const currentIndex = dayOptions.findIndex((option) => option.day === selectedDay);
+    if (currentIndex === -1) return;
+    const delta = direction === 'left' ? -1 : 1;
+    const nextIndex = currentIndex + delta;
+    if (nextIndex < 0 || nextIndex >= dayOptions.length) return;
+    const nextDay = dayOptions[nextIndex].day;
+    onDayChange(nextDay);
+    requestAnimationFrame(() => {
+      const target = trackRef.current?.querySelector<HTMLButtonElement>(`[data-day="${nextDay}"]`);
+      target?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    });
+  };
+
+  return (
+    <div className="day-scroller">
+      <button
+        className="day-scroll-btn"
+        type="button"
+        aria-label="Previous day"
+        onClick={() => {
+          stepDay('left');
+          scrollTrack('left');
+        }}
+      >
+        <ChevronLeft size={14} />
+      </button>
+      <div className="day-scroller-track" ref={trackRef}>
+        {dayOptions.map((option) => (
+          <button
+            key={option.day}
+            data-day={option.day}
+            className={`day-pill ${selectedDay === option.day ? 'active' : ''}`}
+            onClick={() => onDayChange(option.day)}
+          >
+            <span>{option.label}</span>
+            <span className="day-pill-count">{option.count}</span>
+          </button>
+        ))}
+      </div>
+      <button
+        className="day-scroll-btn"
+        type="button"
+        aria-label="Next day"
+        onClick={() => {
+          stepDay('right');
+          scrollTrack('right');
+        }}
+      >
+        <ChevronRight size={14} />
+      </button>
+      <div className="day-scroller-date">
+        <input
+          className="date-input"
+          type="date"
+          value={selectedDay}
+          onChange={(event) => onDayChange(event.target.value)}
+        />
+      </div>
+    </div>
+  );
+});
 
 const InboxView = memo(function InboxView({
   artifacts,
@@ -720,28 +808,166 @@ function LessonView({ daily }: { daily: DailyLesson | null }) {
   );
 }
 
+const DigestView = memo(function DigestView({
+  digest,
+  selectedDay,
+  dayOptions,
+  onDayChange,
+}: {
+  digest: DayDigest | null;
+  selectedDay: string;
+  dayOptions: DayOption[];
+  onDayChange: (day: string) => void;
+}) {
+  const displayDate = new Date(`${selectedDay}T00:00:00`).toLocaleDateString();
+
+  if (!digest) {
+    return (
+      <div className="digest-page">
+        <DayScroller
+          dayOptions={dayOptions}
+          selectedDay={selectedDay}
+          onDayChange={onDayChange}
+        />
+        <div className="story-empty">
+          <p>No digest for {displayDate} yet.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="digest-page">
+      <DayScroller
+        dayOptions={dayOptions}
+        selectedDay={selectedDay}
+        onDayChange={onDayChange}
+      />
+      <div className="digest-grid fade-in">
+        <section className="digest-card digest-card-hero">
+          <div className="digest-kicker">Compressed day summary</div>
+          <h1>{displayDate}</h1>
+          <p className="digest-lead">
+            {digest.stats.totalDoneRecords} committed learning records compressed into {digest.sessionCount} session{digest.sessionCount > 1 ? 's' : ''} and {digest.keyMoments.length} key moment{digest.keyMoments.length > 1 ? 's' : ''}.
+          </p>
+          <div className="digest-chip-row">
+            {digest.themes.length > 0
+              ? digest.themes.map((theme) => <span key={theme} className="story-chip">{theme}</span>)
+              : <span className="story-chip subtle">No themes yet</span>}
+          </div>
+        </section>
+
+        <section className="digest-card">
+          <div className="digest-section-title">Stats</div>
+          <div className="digest-stats">
+            <div className="digest-stat">
+              <span className="digest-stat-value">{digest.stats.totalRecords}</span>
+              <span className="digest-stat-label">visible records</span>
+            </div>
+            <div className="digest-stat">
+              <span className="digest-stat-value">{digest.stats.totalDoneRecords}</span>
+              <span className="digest-stat-label">done records</span>
+            </div>
+            <div className="digest-stat">
+              <span className="digest-stat-value">{digest.stats.totalPatterns}</span>
+              <span className="digest-stat-label">pattern hits</span>
+            </div>
+          </div>
+        </section>
+
+        <section className="digest-card">
+          <div className="digest-section-title">Top Patterns</div>
+          <div className="digest-stack">
+            {digest.topPatterns.length > 0 ? digest.topPatterns.map((pattern) => (
+              <div key={pattern.patternKey} className="digest-item">
+                <div className="digest-item-header">
+                  <strong>{pattern.title}</strong>
+                  <span>{pattern.count} hit{pattern.count > 1 ? 's' : ''}</span>
+                </div>
+                {pattern.sampleLines.length > 0 && (
+                  <div className="digest-inline-list">
+                    {pattern.sampleLines.map((line) => <span key={line} className="digest-inline-pill">{line}</span>)}
+                  </div>
+                )}
+              </div>
+            )) : <div className="digest-empty">No pattern summaries for this day.</div>}
+          </div>
+        </section>
+
+        <section className="digest-card">
+          <div className="digest-section-title">Key Moments</div>
+          <div className="digest-stack">
+            {digest.keyMoments.length > 0 ? digest.keyMoments.map((moment) => (
+              <div key={moment.recordId} className="digest-item">
+                <div className="digest-item-header">
+                  <strong>{moment.enMain || moment.intentZh || 'Untitled moment'}</strong>
+                  <span>{moment.timeBucket}</span>
+                </div>
+                <div className="digest-item-copy">{moment.intentZh || 'No abstracted intent for this moment.'}</div>
+                {moment.patternKeys.length > 0 && (
+                  <div className="digest-inline-list">
+                    {moment.patternKeys.map((pattern) => <span key={pattern} className="digest-inline-pill subtle">{humanizePatternKey(pattern)}</span>)}
+                  </div>
+                )}
+              </div>
+            )) : <div className="digest-empty">No key moments selected yet.</div>}
+          </div>
+        </section>
+
+        <section className="digest-card digest-card-wide">
+          <div className="digest-section-title">Sessions</div>
+          <div className="digest-stack">
+            {digest.sessionDigests.length > 0 ? digest.sessionDigests.map((session, index) => (
+              <div key={session.id} className="digest-session">
+                <div className="digest-item-header">
+                  <strong>Session {index + 1}</strong>
+                  <span>{session.recordCount} record{session.recordCount > 1 ? 's' : ''}</span>
+                </div>
+                <div className="digest-session-range">
+                  {new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {' - '}
+                  {new Date(session.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {session.sourceApps.length > 0 ? ` · ${session.sourceApps.join(', ')}` : ''}
+                </div>
+                <div className="digest-inline-list">
+                  {session.themeLabels.map((theme) => <span key={theme} className="story-chip">{theme}</span>)}
+                  {session.topPatternKeys.map((pattern) => <span key={pattern} className="digest-inline-pill subtle">{humanizePatternKey(pattern)}</span>)}
+                </div>
+                {session.stealLines.length > 0 && (
+                  <div className="digest-item-copy">{session.stealLines.join(' · ')}</div>
+                )}
+              </div>
+            )) : <div className="digest-empty">No sessions available for this day.</div>}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+});
+
 const StoryView = memo(function StoryView({
   stories,
+  selectedDay,
   onGenerate,
 }: {
   stories: StoryArtifact[];
+  selectedDay: string;
   onGenerate: () => void;
 }) {
   const story = stories[0];
-  const { body, stealLines } = useMemo(
-    () => splitStorySections(story?.story ?? ''),
-    [story?.story]
-  );
-  const paragraphs = useMemo(
-    () => body.split(/\n+/).map((line) => line.trim()).filter(Boolean),
-    [body]
-  );
+  const paragraphs = story?.paragraphs?.length
+    ? story.paragraphs
+    : story?.story.split(/\n+/).map((line) => line.trim()).filter(Boolean) ?? [];
+  const stealLines = story?.stealLines ?? [];
+  const themeLabels = story?.themeLabels ?? [];
+  const patternKeys = story?.patternKeys ?? [];
+  const displayDate = new Date(`${selectedDay}T00:00:00`).toLocaleDateString();
 
   if (!story) {
     return (
       <div className="story-page">
         <div className="story-empty">
-          <p>No stories yet.</p>
+          <p>No story for {displayDate} yet.</p>
           <button className="button-primary" onClick={onGenerate}>Generate story</button>
         </div>
       </div>
@@ -754,11 +980,19 @@ const StoryView = memo(function StoryView({
         <div className="story-header">
           <div>
             <h1>{story.title || "Today's Story"}</h1>
-            <div className="date">{new Date(story.createdAt).toLocaleDateString()}</div>
+            <div className="date">{displayDate}</div>
           </div>
           <button className="button-primary" onClick={onGenerate}>Generate story</button>
         </div>
-        <div className="story-note">Generated from today's completed captures; falls back to a safe template if no provider is configured.</div>
+        <div className="story-note">Generated from a compressed day digest, not from the full raw transcript.</div>
+        <div className="story-summary">{story.summary}</div>
+        {(themeLabels.length > 0 || patternKeys.length > 0 || story.sessionCount > 0) && (
+          <div className="story-meta">
+            {story.sessionCount > 0 && <span className="story-chip">{story.sessionCount} session{story.sessionCount > 1 ? 's' : ''}</span>}
+            {themeLabels.map((theme) => <span key={theme} className="story-chip">{theme}</span>)}
+            {patternKeys.map((pattern) => <span key={pattern} className="story-chip subtle">{humanizePatternKey(pattern)}</span>)}
+          </div>
+        )}
         <div className="content">
           {paragraphs.map((p, i) => <p key={i} style={{ marginBottom: '1rem' }}>{p}</p>)}
         </div>

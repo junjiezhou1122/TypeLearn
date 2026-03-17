@@ -2,6 +2,7 @@ import type {
   CaptureRecord,
   ChoiceCandidate,
   ChoiceItem,
+  DayDigest,
   DailyLesson,
   LearningArtifact,
   Pattern,
@@ -10,11 +11,12 @@ import type {
   UtteranceLanguageHint,
 } from '../../shared/src/index';
 import { buildLearningArtifact } from './coaching.js';
+import { buildDayDigest } from './digest.js';
 import { mergeAndFilter } from './llm.js';
 import { extractLearningCn2En, extractLearningEnglish } from './extract_learning.js';
 import { addEventsToPatterns, buildStealLines, groupPatterns } from './patterns.js';
 import { loadState, saveState } from './persistence.js';
-import { generateDailyStory } from './story.js';
+import { generateStoryFromDigest } from './story.js';
 import {
   detectLanguage,
   isLikelyPinyin,
@@ -68,6 +70,7 @@ export class LearningStore {
   #state: PersistedState = {
     records: [],
     stories: [],
+    dailyDigests: {},
     settings: {
       baseUrl: '',
       apiKey: '',
@@ -103,9 +106,12 @@ export class LearningStore {
 
     this.startQueueProcessor();
 
-    setInterval(() => this.watchdog(), 30_000);
-    setInterval(() => this.cleanupExpiredChoices(), 60_000);
-    setInterval(() => this.assembleAllStreams(), assembleTickMs);
+    const watchdogTimer = setInterval(() => this.watchdog(), 30_000);
+    const cleanupTimer = setInterval(() => this.cleanupExpiredChoices(), 60_000);
+    const assembleTimer = setInterval(() => this.assembleAllStreams(), assembleTickMs);
+    watchdogTimer.unref();
+    cleanupTimer.unref();
+    assembleTimer.unref();
   }
 
   private watchdog(): void {
@@ -268,7 +274,17 @@ export class LearningStore {
   }
 
   listStories(): StoryArtifact[] {
-    return [...this.#state.stories];
+    return [...this.#state.stories].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  }
+
+  listStoriesForDay(day: string): StoryArtifact[] {
+    return this.listStories().filter((story) => story.day === day);
+  }
+
+  getDayDigest(day: string): DayDigest {
+    const digest = buildDayDigest(day, this.#state.records, this.#state.patterns);
+    this.#state.dailyDigests[day] = digest;
+    return digest;
   }
 
   getSettings(): ProviderSettings {
@@ -359,12 +375,15 @@ export class LearningStore {
     return true;
   }
 
-  async generateStory(): Promise<StoryArtifact> {
-    const story = await generateDailyStory(
-      this.#state.records.filter((record) => record.status !== 'filtered'),
-      this.#state.settings
-    );
-    this.#state.stories.unshift(story);
+  async generateStory(day = new Date().toISOString().slice(0, 10)): Promise<StoryArtifact> {
+    const digest = buildDayDigest(day, this.#state.records, this.#state.patterns);
+    const story = await generateStoryFromDigest(digest, this.#state.settings);
+
+    this.#state.dailyDigests[day] = digest;
+    this.#state.stories = [
+      story,
+      ...this.#state.stories.filter((item) => item.day !== day),
+    ].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     await saveState(this.#state);
     return story;
   }
@@ -464,6 +483,7 @@ export class LearningStore {
     stream.assembleTimer = setTimeout(() => {
       void this.assembleStream(sourceApp);
     }, assembleDebounceMs);
+    stream.assembleTimer.unref();
   }
 
   private assembleAllStreams(): void {
